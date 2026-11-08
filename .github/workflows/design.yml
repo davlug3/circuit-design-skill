@@ -33,6 +33,11 @@ on:
         required: false
         default: "simulate,erc"
         type: string
+      live_model:
+        description: "Fetch a real model and simulate it (network required)"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -105,5 +110,59 @@ jobs:
           path: |
             out/
             verification.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  live-model:
+    name: Live model fetch and simulation
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.live_model == 'true'
+    needs: tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ngspice
+        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends ngspice
+      - name: Fetch a published model and simulate it
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/live-model"
+          mkdir -p "$work"
+          cat > "$work/ce.json" <<'JSON'
+          {
+            "name": "live_model_ce",
+            "description": "common-emitter stage with a model fetched from the catalog",
+            "ground": "GND",
+            "deliverables": ["spice", "report"],
+            "analyses": [
+              {"type": "op"},
+              {"type": "ac", "start": 10, "stop": 1000000, "points": 20}
+            ],
+            "components": [
+              {"ref": "V1", "type": "V", "value": 12, "pins": {"1": "VCC", "2": "GND"}},
+              {"ref": "V2", "type": "V", "value": 0, "dc": 0, "ac": 1, "pins": {"1": "VIN", "2": "GND"}},
+              {"ref": "R1", "type": "R", "value": 100000, "pins": {"1": "VCC", "2": "VB"}},
+              {"ref": "R2", "type": "R", "value": 20000, "pins": {"1": "VB", "2": "GND"}},
+              {"ref": "RC", "type": "R", "value": 4700, "pins": {"1": "VCC", "2": "VC"}},
+              {"ref": "RE", "type": "R", "value": 1000, "pins": {"1": "VE", "2": "GND"}},
+              {"ref": "C1", "type": "C", "value": 1e-6, "pins": {"1": "VIN", "2": "VB"}},
+              {"ref": "C2", "type": "C", "value": 1e-6, "pins": {"1": "VC", "2": "VOUT"}},
+              {"ref": "RL", "type": "R", "value": 10000, "pins": {"1": "VOUT", "2": "GND"}},
+              {"ref": "Q1", "type": "NPN", "value": 0, "pins": {"1": "VC", "2": "VB", "3": "VE"}}
+            ]
+          }
+          JSON
+          python scripts/model_fetch.py --part 2N3904 \
+            --write-spec "$work/ce.json" --ref Q1 --out "$work/models"
+          python scripts/verify.py "$work/ce.json" --out "$work/out" \
+            --require models,simulate --json | tee "$work/verification.json"
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-model-verification
+          path: ${{ runner.temp }}/live-model/verification.json
           if-no-files-found: warn
           retention-days: 30
