@@ -10,9 +10,14 @@ Verification is layered, and every layer says exactly what it proved:
 3. **Linear electrical check** - an independent pure-Python MNA solve of the
    linear part, compared with closed-form expectations (divider ratio, RC and
    Sallen-Key corner, op-amp gain).
-4. **ngspice** - if installed, the generated netlist is simulated.  Without
-   ngspice, nonlinear circuits are reported as *not simulated*, never as
-   passing.
+4. **ngspice** - if installed *and compatible*, the generated netlist is
+   simulated.  Without ngspice, nonlinear circuits are reported as *not
+   simulated*, never as passing.
+5. **KiCad ERC** - with ``--erc``, KiCad's own electrical rules run when
+   ``kicad-cli`` is installed and compatible.  Missing tools are a skip, not a
+   pass; ``--require`` turns a skip in a required stage into a failure.
+6. **Provenance** - the result records whether it came from this machine or
+   from CI, plus the commit and run id when running in GitHub Actions.
 
 Generic device models are placeholders.  A structural pass is not a promise
 that a real transistor or diode will behave the same way.
