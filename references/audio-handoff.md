@@ -63,8 +63,10 @@ The spec must reject a metric whose `requirement` id is absent.
 - The generic `metrics` verification stage (gain, bandwidth, THD, noise) is
   **not implemented yet**. Until it is, audio targets are planning data, not a
   verified result. Do not report them as measured or simulated.
-- The audio skill's `source_check.py` validates the handoff sources before it
-  reaches this skill.
+- The audio skill validates the handoff with
+  `source_check.py --strict --handoff <file>`; every requirement source must be
+  verified and listed, and every metric must reference an existing requirement.
+  The sibling repo ships `examples/mic-preamp-handoff.json`.
 
 ## Locating the sibling
 
