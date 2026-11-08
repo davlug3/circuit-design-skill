@@ -719,9 +719,12 @@ def _run_ngspice(netlist: Path) -> Check:
     exe = capability.get("path")
     with tempfile.TemporaryDirectory() as td:
         log = Path(td) / "ngspice.log"
+        raw = Path(td) / "ngspice.raw"
         try:
             proc = subprocess.run(
-                [exe, "-b", "-o", str(log), str(netlist)],
+                # -r writes every analysis to a rawfile. Without it, ngspice 42
+                # exits 1 when an .ac analysis produces no printable output.
+                [exe, "-b", "-o", str(log), "-r", str(raw), str(netlist)],
                 capture_output=True, text=True, timeout=120,
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
