@@ -29,8 +29,8 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -39,6 +39,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import env_probe  # noqa: E402
 import generate as gen  # noqa: E402
 from circuit_common import dumps, si_number, spice_number, spice_ref  # noqa: E402
 from design_spec import (  # noqa: E402
@@ -51,6 +52,28 @@ from mna import MNAError, UnsupportedElement, from_components  # noqa: E402
 from symbols import asc_pins  # noqa: E402
 
 LINEAR_TYPES = {"R", "C", "L", "V", "I", "E", "G", "OPAMP"}
+
+# Stage name used by env_probe.py -> the check it must turn into a PASS.
+REQUIRED_CHECK = {
+    "simulate": "ngspice",
+    "erc": "kicad_erc",
+    "kicad-parse": "kicad_schematic",
+}
+
+
+def provenance(required: list[str] | tuple[str, ...] | None = None) -> dict[str, Any]:
+    """Record where the evidence came from, so CI cannot be mistaken for local."""
+    backend = os.environ.get("CIRCUIT_BACKEND") or (
+        "ci" if os.environ.get("GITHUB_ACTIONS") else "local")
+    data: dict[str, Any] = {"backend": backend,
+                            "required_stages": list(required or [])}
+    if os.environ.get("GITHUB_ACTIONS"):
+        data.update({
+            "commit": os.environ.get("GITHUB_SHA"),
+            "run_id": os.environ.get("GITHUB_RUN_ID"),
+            "repository": os.environ.get("GITHUB_REPOSITORY"),
+        })
+    return data
 
 
 class Check:
@@ -684,10 +707,16 @@ def check_pcb_handoff(spec: dict[str, Any], out: Path) -> Check:
 
 
 def _run_ngspice(netlist: Path) -> Check:
-    exe = shutil.which("ngspice")
-    if exe is None:
+    capability = env_probe.probe_ngspice()
+    if not capability.get("supported"):
+        if capability.get("ok"):
+            return Check("ngspice", None,
+                         "ngspice is installed but incompatible with this machine ("
+                         + capability.get("detail", "no reason reported")
+                         + "); nonlinear devices were not simulated")
         return Check("ngspice", None,
                      "ngspice is not installed; nonlinear devices were not simulated")
+    exe = capability.get("path")
     with tempfile.TemporaryDirectory() as td:
         log = Path(td) / "ngspice.log"
         try:
@@ -730,6 +759,41 @@ def _run_ngspice(netlist: Path) -> Check:
         return Check("ngspice", None,
                      "ngspice completed but its output format could not be parsed; "
                      "see the log for the raw result", {"log": text[-2000:]})
+
+
+def check_kicad_erc(sch: Path, out: Path) -> Check:
+    """Run KiCad's own ERC, but only when kicad-cli is actually usable here."""
+    capability = env_probe.probe_kicad_cli()
+    if not capability.get("supported"):
+        if capability.get("ok"):
+            return Check("kicad_erc", None,
+                         "kicad-cli is installed but incompatible with this machine ("
+                         + capability.get("detail", "no reason reported") + "); ERC was not run")
+        return Check("kicad_erc", None,
+                     "kicad-cli is not installed; ERC was not run")
+    exe = capability.get("path")
+    report = out / f"{sch.stem}-erc.rpt"
+    try:
+        proc = subprocess.run(
+            [exe, "sch", "erc", "--severity-error", "--exit-code-violations",
+             "-o", str(report), str(sch)],
+            capture_output=True, text=True, timeout=180,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return Check("kicad_erc", False, f"kicad-cli ERC could not run: {exc}")
+    text = report.read_text(errors="replace") if report.exists() else proc.stdout + proc.stderr
+    violations = len(re.findall(r"^\s*\[error\]", text, flags=re.IGNORECASE | re.MULTILINE))
+    evidence = {"report": str(report), "exit_code": proc.returncode,
+                "report_text": text[-4000:]}
+    if proc.returncode == 5:
+        return Check("kicad_erc", False,
+                     f"KiCad ERC found {violations or 'one or more'} error-level violation(s); "
+                     f"see {report.name}", evidence)
+    if proc.returncode != 0:
+        return Check("kicad_erc", False,
+                     f"kicad-cli ERC exited with {proc.returncode}", evidence)
+    return Check("kicad_erc", True,
+                 f"KiCad ERC reported no error-level violations ({report.name})", evidence)
 
 
 def design_consistency(spec: dict[str, Any]) -> list[Check]:
@@ -809,7 +873,9 @@ def design_consistency(spec: dict[str, Any]) -> list[Check]:
 def verify(spec_path: str | Path, outdir: str | Path,
            *, update_report: bool = True, pcb_board: str | None = None,
            pcb_profile: str | None = None, pcb_layers: int | None = None,
-           pcb_skill: str | Path | None = None) -> dict[str, Any]:
+           pcb_skill: str | Path | None = None,
+           erc: bool = False,
+           required: list[str] | tuple[str, ...] | None = None) -> dict[str, Any]:
     raw = json.loads(Path(spec_path).read_text(encoding="utf-8"))
     validation = validate_spec(raw)
     if not validation["ok"]:
@@ -856,6 +922,27 @@ def verify(spec_path: str | Path, outdir: str | Path,
 
     if paths["spice"].exists():
         checks.append(_run_ngspice(paths["spice"]))
+    if erc and paths["kicad_sch"].exists():
+        checks.append(check_kicad_erc(paths["kicad_sch"], out))
+
+    if required:
+        for stage in required:
+            check_name = REQUIRED_CHECK.get(stage)
+            check = next((c for c in checks if c.name == check_name), None)
+            if check is None:
+                checks.append(Check(
+                    f"required:{stage}", False,
+                    f"stage {stage!r} was required but its check did not run "
+                    f"(expected {check_name!r})"))
+            elif check.ok is not True:
+                checks.append(Check(
+                    f"required:{stage}", False,
+                    f"stage {stage!r} was required but {check_name!r} did not pass: "
+                    f"{check.detail}"))
+            else:
+                checks.append(Check(
+                    f"required:{stage}", True,
+                    f"stage {stage!r} required and passed ({check_name})"))
 
     failed = [c for c in checks if c.ok is False]
     skipped = [c for c in checks if c.ok is None]
@@ -872,6 +959,7 @@ def verify(spec_path: str | Path, outdir: str | Path,
         "checks": [c.as_dict() for c in checks],
         "warnings": validation["warnings"],
         "simulation_status": model_status(spec),
+        "provenance": provenance(required),
     }
     vpath = out / f"{name}-verification.json"
     vpath.write_text(dumps(result) + "\n", encoding="utf-8")
@@ -891,6 +979,14 @@ def _print(result: dict[str, Any]) -> None:
     for check in result["checks"]:
         mark = {True: "PASS", False: "FAIL", None: "SKIP"}[check["ok"]]
         print(f"  [{mark}] {check['name']}: {check['detail']}")
+    prov = result.get("provenance") or {}
+    if prov:
+        where = prov.get("backend", "local")
+        if prov.get("commit"):
+            where += f" commit {str(prov['commit'])[:12]}"
+        if prov.get("run_id"):
+            where += f" run {prov['run_id']}"
+        print(f"  backend: {where}")
     if result.get("warnings"):
         print("warnings:")
         for warning in result["warnings"]:
@@ -913,12 +1009,22 @@ def main(argv: list[str] | None = None) -> int:
                         help="PCB copper layer count")
     parser.add_argument("--pcb-profile", help="pcb-design-skill profile name")
     parser.add_argument("--pcb-skill", help="path to the pcb-design-skill directory")
+    parser.add_argument("--erc", action="store_true",
+                        help="also run KiCad ERC when kicad-cli is compatible")
+    parser.add_argument("--require", metavar="STAGES",
+                        help="comma-separated stages that must PASS: simulate, erc, kicad-parse")
     ns = parser.parse_args(argv)
+    required = [s.strip() for s in (ns.require or "").split(",") if s.strip()]
+    unknown = [s for s in required if s not in REQUIRED_CHECK]
+    if unknown:
+        parser.error("unknown stage(s) in --require: " + ", ".join(unknown)
+                     + " (allowed: " + ", ".join(sorted(REQUIRED_CHECK)) + ")")
     try:
         result = verify(
             ns.spec, ns.out, update_report=not ns.no_update_report,
             pcb_board=ns.pcb_board, pcb_profile=ns.pcb_profile,
             pcb_layers=ns.pcb_layers, pcb_skill=ns.pcb_skill,
+            erc=ns.erc, required=required,
         )
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"error: {exc}", file=sys.stderr)

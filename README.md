@@ -29,6 +29,44 @@ files to check them.
 - Standard library only: no numpy, scipy, KiCad, LTspice or ngspice required
 - Optional: `kiutils` for KiCad schematic parsing
 - Optional: `ngspice` for nonlinear simulation
+- Optional: `kicad-cli` 9+ for ERC
+- Optional: `gh` + a pushed git branch for the GitHub Actions fallback
+
+## Environment probe and CI fallback
+
+A tool on `PATH` is not necessarily a tool that runs. `env_probe.py` executes
+each binary (including a two-resistor ngspice smoke deck) and classifies it:
+
+```bash
+python3 scripts/env_probe.py --spec examples/rc-lowpass.json
+```
+
+```
+  ngspice      INCOMPAT  error while loading shared libraries: libngspice.so.0
+  kicad-cli    MISSING   kicad-cli not found on PATH
+  simulate     NOT READY: incompatible ngspice
+  erc          NOT READY: missing kicad-cli
+  Recommended backend: ci
+```
+
+To require real evidence and fail instead of silently skipping:
+
+```bash
+python3 scripts/verify.py examples/rc-lowpass.json --out out/ --require simulate
+```
+
+When the machine cannot run the stage, send the same spec to the pinned
+GitHub Actions runner (KiCad 9 + ngspice):
+
+```bash
+python3 scripts/ci_dispatch.py --spec examples/rc-lowpass.json \
+  --require simulate,erc --watch --download out/ci
+```
+
+Dispatch refuses a dirty tree, a missing upstream or an unpushed commit,
+because CI verifies the pushed revision, not the working copy. The verification
+JSON records `provenance.backend` (`local` or `ci`), the commit SHA and the run
+id.
 
 ## Quick start
 

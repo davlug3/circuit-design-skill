@@ -32,6 +32,11 @@ silently disagree with it.
    layout, DRC and fabrication; see `references/pcb-handoff.md`.
 7. **Pin numbers are logical, not physical.** See the warning in
    `references/kicad-format.md` before connecting a footprint.
+8. **Probe capability, not presence.** A binary on `PATH` may still be
+   unusable (wrong architecture, missing shared library, too old). Run
+   `scripts/env_probe.py` before trusting a stage. If the local machine cannot
+   run it, verify on CI and record the backend; never report a local `SKIP` as
+   a local `PASS` because CI passed.
 
 ## Workflow
 
@@ -176,10 +181,35 @@ The verifier re-reads the generated files and checks:
   sibling PCB validator accepts the overlay when all footprints are present;
 - linear circuits solve in the independent MNA solver and match closed-form
   expectations;
-- `ngspice` runs the netlist if it is installed.
+- `ngspice` runs the netlist if it is installed and compatible;
+- KiCad ERC runs with `--erc` when `kicad-cli` is installed and compatible.
 
 Read `references/verification.md` for what each check proves and what it does
 not.
+
+#### When the local machine cannot run a check
+
+```bash
+# What can this machine actually do?
+python3 scripts/env_probe.py --spec specs/rc.json
+
+# Make the run fail unless simulation really passed here.
+python3 scripts/verify.py specs/rc.json --out out/ --require simulate
+
+# Machine is aarch64/Android with no ngspice or KiCad? Use CI.
+python3 scripts/ci_dispatch.py --spec specs/rc.json --require simulate,erc \
+  --watch --download out/ci
+```
+
+The probe runs each tool, not just `which`. It reports `MISSING` and
+`INCOMPATIBLE` separately, and `recommended_backend` is `local`, `ci` or
+`none`. The verifier's JSON records `provenance.backend`, so a CI result is
+never mistaken for a local one.
+
+CI dispatch requires a git repository with a pushed branch and the
+`.github/workflows/design.yml` workflow; it refuses a dirty tree, an unpushed
+commit or a spec outside the repository, because GitHub would verify a
+different revision.
 
 ### 7. Report
 
@@ -229,7 +259,10 @@ scripts/design_spec.py       validate / normalize / scaffold
 scripts/symbols.py           LTspice and KiCad symbol geometry
 scripts/generate.py          .cir, .asc, .net, .kicad_sch, BOM, report
 scripts/pcb_handoff.py       overlay, pin map, node aliases, handoff document
-scripts/verify.py            structural, MNA, PCB and ngspice checks
+scripts/verify.py            structural, MNA, ERC and ngspice checks
+scripts/env_probe.py         capability probe: ok / incompatible / missing
+scripts/ci_dispatch.py       GitHub Actions dispatch with safety checks
+.github/workflows/design.yml  unit tests, KiCad 9 + ngspice verification
 references/                  intake, topologies, analog, digital, power,
                              physics/reliability, LTspice, KiCad, PCB handoff,
                              verification
@@ -242,7 +275,21 @@ tests/                       unit and end-to-end tests
 Python 3.10+ standard library only. No numpy/scipy, no KiCad, no LTspice and
 no ngspice are required to generate and structurally verify files. `kiutils`
 is optional and only used for schematic parsing; `ngspice` is optional and only
-used for simulation.
+used for simulation; `kicad-cli` is optional and only used for ERC.
+
+Presence is not capability. Run the probe first:
+
+```bash
+python3 scripts/env_probe.py
+python3 scripts/env_probe.py --json --spec specs/rc.json
+```
+
+If the stages you need are `NOT READY`, dispatch the same spec to the GitHub
+Actions workflow instead of claiming the check passed:
+
+```bash
+python3 scripts/ci_dispatch.py --spec specs/rc.json --require simulate,erc --watch
+```
 
 ```bash
 python3 -m unittest discover -s tests -v

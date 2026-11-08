@@ -13,6 +13,8 @@ written down.
 | PCB handoff | Overlay, pin map and aliases agree with the netlist | Layout, DRC, DFM, real pads |
 | MNA (linear) | Exact DC/AC solution of the linear model | Nonlinear devices, parasitics, layout |
 | ngspice | The generated netlist runs and converges | Real-device behaviour if models are generic |
+| KiCad ERC | KiCad's own electrical rules accept the schematic | Layout, DRC, DFM, real pads |
+| CI (GitHub Actions) | The same checks ran at a known commit in a pinned image | That this machine can run them; bench behaviour |
 | Datasheet check | The part can meet the stress | The whole system |
 | Bench measurement | The physical circuit works | All units, all temperatures |
 
@@ -55,10 +57,53 @@ python3 scripts/verify.py specs/rc.json --out out/ --json
    - RC: compares the numerical -3 dB point with `1/(2*pi*R*C)`;
    - Sallen-Key: compares the numerical corner with the design target;
    - non-inverting op-amp: compares `|gain(10 Hz)|` with `1+Rf/Rg`.
-9. **ngspice** — if installed, runs the generated netlist in batch mode. A
-   singular matrix or non-convergence is a failure. If the output format cannot
-   be parsed, the check is skipped and the raw log is attached; an unparsed run
-   is not evidence.
+9. **ngspice** — if installed *and compatible*, runs the generated netlist in
+   batch mode. A singular matrix or non-convergence is a failure. If the output
+   format cannot be parsed, the check is skipped and the raw log is attached; an
+   unparsed run is not evidence.
+10. **KiCad ERC** — with `--erc`, runs `kicad-cli sch erc --severity-error
+    --exit-code-violations`. Exit code 5 means error-level violations and is a
+    failure; any other non-zero code is a tool error, not a clean pass. The
+    report is written next to the output as `<name>-erc.rpt`.
+11. **Required stages** — `--require simulate,erc,kicad-parse` converts a
+    `SKIP` in a required stage into a failure. This is what CI uses so a
+    missing tool cannot masquerade as a pass.
+
+## Local capability and CI
+
+`scripts/env_probe.py` classifies every tool the verifier can use:
+
+| State | Meaning |
+|---|---|
+| `ok` | Found, executes, meets the minimum version |
+| `incompatible` | Found, but cannot execute or is too old (reason recorded) |
+| `missing` | Not on `PATH` or not importable |
+
+A binary can be `incompatible` for aarch64/Android (x86-64 build), for a
+missing shared library, or because `kicad-cli` predates the ERC flags this
+skill passes. The verifier distinguishes `missing` from `incompatible` in its
+`SKIP` text, so the reason is never lost.
+
+When a required stage is not locally available:
+
+```bash
+python3 scripts/ci_dispatch.py --spec specs/rc.json --require simulate,erc --watch
+```
+
+CI runs on `ubuntu-24.04` with KiCad 9 from the `kicad-9.0-releases` PPA and
+`ngspice` from apt. It checks out the pushed commit, runs the unit tests, then
+generates and verifies with the required stages, and uploads `out/` and the
+verification JSON.
+
+Rules for CI evidence:
+
+- CI proves the run happened at that commit in that image. It does **not** prove
+  this machine can run the tools.
+- A CI pass never upgrades a local `SKIP` to a local `PASS`. The JSON records
+  `provenance.backend` and the commit/run id.
+- Dispatch refuses a dirty tree, a missing upstream or unpushed commits, because
+  GitHub would otherwise verify a different revision.
+
 
 ## Reading the result
 
