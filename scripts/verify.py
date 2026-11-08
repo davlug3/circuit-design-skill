@@ -726,13 +726,20 @@ def _run_ngspice(netlist: Path) -> Check:
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             return Check("ngspice", False, f"ngspice could not run: {exc}")
-        text = (log.read_text(errors="replace") if log.exists() else "") + proc.stdout + proc.stderr
+        log_text = log.read_text(errors="replace") if log.exists() else ""
+        text = log_text + proc.stdout + proc.stderr
+        evidence = {
+            "returncode": proc.returncode,
+            "stderr": (proc.stderr or "")[-1500:],
+            "stdout": (proc.stdout or "")[-1500:],
+            "log": log_text[-3000:],
+        }
         if "singular matrix" in text.lower() or "doanalyses: iteration limit reached" in text.lower():
             return Check("ngspice", False, "ngspice reported a singular matrix or non-convergence",
-                         {"log": text[-2000:]})
+                         evidence)
         if proc.returncode != 0:
             return Check("ngspice", False, f"ngspice exited with {proc.returncode}",
-                         {"log": text[-2000:]})
+                         evidence)
         # Best-effort parse of the operating-point table.
         voltages: dict[str, float] = {}
         in_table = False

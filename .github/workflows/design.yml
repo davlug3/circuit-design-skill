@@ -84,6 +84,7 @@ jobs:
         env:
           CIRCUIT_BACKEND: ci
         run: |
+          set -euo pipefail
           if [[ "$REQUIRE" == *erc* ]]; then ERC="--erc"; else ERC=""; fi
           python scripts/verify.py "$SPEC" --out out --json \
             --require "$REQUIRE" $ERC | tee verification.json
