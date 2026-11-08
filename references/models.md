@@ -175,7 +175,9 @@ not by the order they appear in the `.asc`, so `subckt_pins` must match the
 symbol's natural order (`D G S` for the MOSFET symbol, `C B E` for the BJT,
 `A K` for the diode, and so on). The generator refuses the export otherwise
 rather than producing a silently mis-wired schematic. A 4-terminal subcircuit
-cannot be represented by the built-in 3-pin symbols.\n\n## What this still does not prove
+cannot be represented by the built-in 3-pin symbols.
+
+## What this still does not prove
 
 - The vendor model matches the physical part on your reel (process corner,
   package parasitics, thermal behaviour).
