@@ -1,0 +1,92 @@
+{
+  "schema_version": "1.0",
+  "name": "rc_lowpass_pcb",
+  "description": "RC low-pass filter with a pcb-design-skill handoff",
+  "topology": "rc_lowpass",
+  "ground": "GND",
+  "supplies": [],
+  "parameters": {
+    "r": 1000.0,
+    "c": 1.0000000000000001e-07
+  },
+  "components": [
+    {
+      "ref": "V1",
+      "type": "V",
+      "value": 0.0,
+      "pins": {
+        "1": "IN",
+        "2": "GND"
+      },
+      "dc": 1.0,
+      "ac": 1.0
+    },
+    {
+      "ref": "R1",
+      "type": "R",
+      "value": 1000.0,
+      "pins": {
+        "1": "IN",
+        "2": "OUT"
+      }
+    },
+    {
+      "ref": "C1",
+      "type": "C",
+      "value": 1.0000000000000001e-07,
+      "pins": {
+        "1": "OUT",
+        "2": "GND"
+      }
+    }
+  ],
+  "analyses": [
+    {
+      "type": "op"
+    },
+    {
+      "type": "ac",
+      "start": 10.0,
+      "stop": 1000000.0,
+      "points": 200
+    }
+  ],
+  "deliverables": [
+    "bom",
+    "kicad_net",
+    "kicad_sch",
+    "ltspice_asc",
+    "pcb",
+    "report",
+    "spice"
+  ],
+  "assumptions": [
+    "R = 1 kohm, C = 100 nF",
+    "Source impedance is zero and load is open",
+    "Ideal components; no parasitic ESR/ESL"
+  ],
+  "models": {},
+  "notes": [],
+  "environment": {
+    "ta_c": 25.0,
+    "tj_max_c": 125.0
+  },
+  "verification": {
+    "tolerance_percent": 2.0
+  },
+  "pcb": {
+    "profile": "2layer-low-speed",
+    "board": {
+      "width_mm": 30.0,
+      "height_mm": 20.0,
+      "layers": 2
+    },
+    "footprints": {
+      "R1": "Resistor_SMD:R_0805_2012Metric",
+      "C1": "Capacitor_SMD:C_0805_2012Metric"
+    },
+    "placement": {
+      "mode": "auto"
+    }
+  }
+}

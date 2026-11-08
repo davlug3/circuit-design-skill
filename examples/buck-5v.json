@@ -1,0 +1,130 @@
+{
+  "schema_version": "1.0",
+  "name": "buck",
+  "description": "Buck converter power stage, 12 V to 5 V at 2 A",
+  "topology": "buck",
+  "ground": "GND",
+  "supplies": [
+    {
+      "name": "VIN",
+      "voltage": 12.0
+    }
+  ],
+  "parameters": {
+    "vin": 12.0,
+    "vout": 5.0,
+    "iout": 2.0,
+    "fsw": 500000.0
+  },
+  "components": [
+    {
+      "ref": "V1",
+      "type": "V",
+      "value": 0.0,
+      "pins": {
+        "1": "VIN",
+        "2": "GND"
+      },
+      "dc": 12.0
+    },
+    {
+      "ref": "S1",
+      "type": "SW",
+      "value": 0.0,
+      "pins": {
+        "1": "VIN",
+        "2": "SW",
+        "3": "PWM",
+        "4": "GND"
+      },
+      "model": "SWMOD"
+    },
+    {
+      "ref": "D1",
+      "type": "D",
+      "value": 0.0,
+      "pins": {
+        "1": "GND",
+        "2": "SW"
+      },
+      "model": "DGEN"
+    },
+    {
+      "ref": "L1",
+      "type": "L",
+      "value": 9.722222222222223e-06,
+      "pins": {
+        "1": "SW",
+        "2": "OUT"
+      }
+    },
+    {
+      "ref": "C1",
+      "type": "C",
+      "value": 1.4999999999999999e-05,
+      "pins": {
+        "1": "OUT",
+        "2": "GND"
+      }
+    },
+    {
+      "ref": "RL1",
+      "type": "R",
+      "value": 2.5,
+      "pins": {
+        "1": "OUT",
+        "2": "GND"
+      }
+    },
+    {
+      "ref": "V2",
+      "type": "V",
+      "value": 0.0,
+      "pins": {
+        "1": "PWM",
+        "2": "GND"
+      },
+      "waveform": {
+        "type": "pulse",
+        "params": [
+          0.0,
+          5.0,
+          0.0,
+          1e-09,
+          1e-09,
+          8.333333333333333e-07,
+          2e-06
+        ]
+      }
+    }
+  ],
+  "analyses": [
+    {
+      "type": "tran",
+      "step": 2e-09,
+      "stop": 4e-05
+    }
+  ],
+  "deliverables": [
+    "bom",
+    "kicad_net",
+    "kicad_sch",
+    "ltspice_asc",
+    "report",
+    "spice"
+  ],
+  "assumptions": [
+    "CCM, ideal switch and diode, 30% ripple",
+    "Generic switch/diode models; verify with the real controller and FET",
+    "Loop compensation, EMI and thermal design are not modelled"
+  ],
+  "models": {},
+  "notes": [],
+  "environment": {
+    "ta_c": 25.0,
+    "tj_max_c": 125.0
+  },
+  "verification": {
+    "tolerance_percent": 2.0
+  }
+}

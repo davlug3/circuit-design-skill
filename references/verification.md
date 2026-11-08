@@ -1,0 +1,143 @@
+# Verification
+
+A design is not "done" because the file exists. It is done when the claims you
+make are backed by a check you actually ran, and the limits of that check are
+written down.
+
+## Evidence levels
+
+| Level | What it proves | What it does not prove |
+|---|---|---|
+| Spec validation | Structure, pins, nets, references are consistent | Electrical behaviour |
+| Netlist agreement | SPICE / LTspice / KiCad describe the same nodes | Simulation accuracy |
+| PCB handoff | Overlay, pin map and aliases agree with the netlist | Layout, DRC, DFM, real pads |
+| MNA (linear) | Exact DC/AC solution of the linear model | Nonlinear devices, parasitics, layout |
+| ngspice | The generated netlist runs and converges | Real-device behaviour if models are generic |
+| Datasheet check | The part can meet the stress | The whole system |
+| Bench measurement | The physical circuit works | All units, all temperatures |
+
+Report the highest level actually reached. "PASS" at a lower level must not be
+phrased as a higher-level claim.
+
+## What `verify.py` checks
+
+```bash
+python3 scripts/verify.py specs/rc.json --out out/
+python3 scripts/verify.py specs/rc.json --out out/ --json
+```
+
+1. **Spec** — `design_spec.validate_spec`.
+2. **SPICE netlist** — re-reads `<name>.cir`, extracts device lines, and
+   compares each device's node list with the spec. Catches a missing device,
+   swapped nodes, or a wrong ground mapping.
+3. **LTspice `.asc`** — parses `SYMBOL`, `SYMATTR` and `FLAG` lines, recomputes
+   every pin coordinate, and checks that the flag at that coordinate has the
+   expected net. Catches the classic "one grid unit off" bug.
+4. **KiCad netlist** — parses the S-expression and compares every net's node
+   set with the spec. Any extra or missing node is a failure.
+5. **KiCad schematic** — uses `kiutils` to parse the file, reads the **embedded
+   symbol** pin coordinates, applies the placed symbol's transform, and checks
+   that a global label with the right name sits at each pin endpoint. Skipped,
+   not passed, if `kiutils` is unavailable.
+6. **PCB handoff** — if `<name>-pcb.json` exists, checks that every boardable
+   part is in the overlay, that pin-map references exist and do not assign one
+   pad to two different nets, that `node_aliases["0"]` is the ground net, and
+   that every declared net uses a defined netclass. Missing footprints and
+   missing pin maps are reported as remaining work. When every footprint is
+   present and the sibling `pcb-design-skill` is installed, it also runs the
+   sibling's spec validator and reports its warnings. This proves the overlay
+   is internally consistent and accepted by the PCB skill's rules; it does not
+   prove DRC, DFM or that a footprint's real pads match the datasheet.
+7. **Design consistency** — for supported topologies, re-runs the sizing
+   calculator and checks the chosen `L`, `Cout` or series resistor.
+8. **MNA** — builds a linear circuit from the spec and solves DC and AC. Then:
+   - divider: compares `Vout` with `Vin*R2/(R1+R2)`;
+   - RC: compares the numerical -3 dB point with `1/(2*pi*R*C)`;
+   - Sallen-Key: compares the numerical corner with the design target;
+   - non-inverting op-amp: compares `|gain(10 Hz)|` with `1+Rf/Rg`.
+9. **ngspice** — if installed, runs the generated netlist in batch mode. A
+   singular matrix or non-convergence is a failure. If the output format cannot
+   be parsed, the check is skipped and the raw log is attached; an unparsed run
+   is not evidence.
+
+## Reading the result
+
+```
+PASS: rc_lowpass (9 passed, 1 skipped, 0 failed)
+  [PASS] spec: ...
+  [PASS] spice_netlist: 3 devices, node lists match the spec
+  [PASS] ltspice_asc: 3 symbols; every pin has a matching net flag
+  [PASS] kicad_netlist: 3 nets match the spec exactly
+  [PASS] kicad_schematic: 3 symbols; every pin endpoint carries the correct global label
+  [PASS] pcb_handoff: 2 board parts, 0 pin map(s), 1 node alias(es) ...
+  [PASS] mna_dc: DC operating point solved; node voltages: ...
+  [PASS] rc_corner: -3 dB at 1.59118 kHz, closed form 1.59155 kHz
+  [PASS] mna_ac: AC solve is finite
+  [SKIP] ngspice: ngspice is not installed; nonlinear devices were not simulated
+```
+
+- **PASS** — the check ran and the assertion held.
+- **FAIL** — the check ran and the assertion did not hold. Fix the design.
+- **SKIP** — the check could not run (missing tool, nonlinear device, no AC
+  source). A skip is not a pass. Say why it was skipped. The PCB handoff is
+  skipped when it was not generated; the sibling PCB-spec validation is
+  deferred, not passed, while footprints are still missing.
+
+The result is written to `<name>-verification.json`, and the Markdown report is
+regenerated with the evidence.
+
+## Honesty rules
+
+1. **No "this should work".** If you did not run it, say "not verified".
+2. **Generic models are placeholders.** A simulation with a generic BJT or
+   diode is a smoke test, not a design validation. The report must say so.
+3. **MNA is linear.** It refuses diodes, BJTs and MOSFETs. Do not linearise
+   them silently.
+4. **A structural pass is not ERC/DRC.** KiCad's ERC checks more than the
+   generator does. Run it in KiCad.
+5. **A simulation is not a bench measurement.** Temperature, tolerance,
+   parasitics, layout and part variation are outside the model.
+6. **Do not quote a number without its condition.** "1.59 kHz" is meaningless
+   without the resistor and capacitor values and the model.
+
+## Adding a check
+
+A check is a function returning a `Check`:
+
+```python
+Check(name, ok, detail, evidence)
+# ok=True  -> ran and passed
+# ok=False -> ran and failed
+# ok=None  -> could not run (skipped)
+```
+
+Guidelines:
+
+- Assert something falsifiable. "The netlist exists" is weak; "every pin's
+  node matches the spec" is strong.
+- Put the actual and expected values in `detail`.
+- Attach raw numbers in `evidence` so a later reader can recompute.
+- Never return `ok=True` when the tool was missing or the output was not
+  parsed.
+- Keep the check independent of the generator where possible. Re-read the
+  generated file; do not trust the in-memory object.
+
+## What to verify by hand
+
+Even with a full pass:
+
+- Read the datasheet for every semiconductor, connector and power part.
+- Check the absolute maximum ratings at the worst-case temperature.
+- Check the pinout against the package drawing.
+- Check the footprint pad numbering against the logical pin numbering.
+- Review the thermal and derating numbers.
+- Review the protection and fault behaviour.
+- Run ERC/DRC in KiCad before fabrication.
+- Build and measure a prototype before production.
+
+## Sources
+
+- IPC-2221B, *Generic Standard on Printed Board Design*.
+- Vendor datasheets and application notes for the specific parts.
+- KiCad, *Electrical Rules Checker* documentation.
+- `ngspice` manual, batch mode and analyses.

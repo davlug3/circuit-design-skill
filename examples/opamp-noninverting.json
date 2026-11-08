@@ -1,0 +1,117 @@
+{
+  "schema_version": "1.0",
+  "name": "opamp_noninverting",
+  "description": "Non-inverting amplifier, gain 10",
+  "topology": "opamp_noninverting",
+  "ground": "GND",
+  "supplies": [
+    {
+      "name": "VCC",
+      "voltage": 5.0
+    },
+    {
+      "name": "VEE",
+      "voltage": -5.0
+    }
+  ],
+  "parameters": {
+    "gain": 10.0,
+    "rg": 1000.0
+  },
+  "components": [
+    {
+      "ref": "V1",
+      "type": "V",
+      "value": 0.0,
+      "pins": {
+        "1": "IN",
+        "2": "GND"
+      },
+      "dc": 0.0,
+      "ac": 1.0
+    },
+    {
+      "ref": "RF1",
+      "type": "R",
+      "value": 9000.0,
+      "pins": {
+        "1": "OUT",
+        "2": "N"
+      }
+    },
+    {
+      "ref": "RG1",
+      "type": "R",
+      "value": 1000.0,
+      "pins": {
+        "1": "N",
+        "2": "GND"
+      }
+    },
+    {
+      "ref": "U1",
+      "type": "OPAMP",
+      "value": 1000000.0,
+      "pins": {
+        "1": "IN",
+        "2": "N",
+        "3": "VCC",
+        "4": "VEE",
+        "5": "OUT"
+      }
+    },
+    {
+      "ref": "V2",
+      "type": "V",
+      "value": 0.0,
+      "pins": {
+        "1": "VCC",
+        "2": "GND"
+      },
+      "dc": 5.0
+    },
+    {
+      "ref": "V3",
+      "type": "V",
+      "value": 0.0,
+      "pins": {
+        "1": "VEE",
+        "2": "GND"
+      },
+      "dc": -5.0
+    }
+  ],
+  "analyses": [
+    {
+      "type": "op"
+    },
+    {
+      "type": "ac",
+      "start": 10.0,
+      "stop": 1000000.0,
+      "points": 200
+    }
+  ],
+  "deliverables": [
+    "bom",
+    "kicad_net",
+    "kicad_sch",
+    "ltspice_asc",
+    "report",
+    "spice"
+  ],
+  "assumptions": [
+    "Ideal single-pole op-amp model, GBW = 1 MHz",
+    "Supply rails +/-5 V; output is not clipped in the model",
+    "Rf/Rg tolerance sets the gain error"
+  ],
+  "models": {},
+  "notes": [],
+  "environment": {
+    "ta_c": 25.0,
+    "tj_max_c": 125.0
+  },
+  "verification": {
+    "tolerance_percent": 2.0
+  }
+}

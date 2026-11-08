@@ -1,0 +1,135 @@
+{
+  "schema_version": "1.0",
+  "name": "sallen_key_lp",
+  "description": "Sallen-Key low-pass, 1 kHz Butterworth",
+  "topology": "sallen_key_lp",
+  "ground": "GND",
+  "supplies": [
+    {
+      "name": "VCC",
+      "voltage": 5.0
+    },
+    {
+      "name": "VEE",
+      "voltage": -5.0
+    }
+  ],
+  "parameters": {
+    "fc": 1000.0,
+    "q": 0.7071
+  },
+  "components": [
+    {
+      "ref": "V1",
+      "type": "V",
+      "value": 0.0,
+      "pins": {
+        "1": "IN",
+        "2": "GND"
+      },
+      "dc": 0.0,
+      "ac": 1.0
+    },
+    {
+      "ref": "R1",
+      "type": "R",
+      "value": 11254.061878934759,
+      "pins": {
+        "1": "IN",
+        "2": "A"
+      }
+    },
+    {
+      "ref": "R2",
+      "type": "R",
+      "value": 11254.061878934759,
+      "pins": {
+        "1": "A",
+        "2": "P"
+      }
+    },
+    {
+      "ref": "C1",
+      "type": "C",
+      "value": 1.9999616399999997e-08,
+      "pins": {
+        "1": "A",
+        "2": "OUT"
+      }
+    },
+    {
+      "ref": "C2",
+      "type": "C",
+      "value": 1e-08,
+      "pins": {
+        "1": "P",
+        "2": "GND"
+      }
+    },
+    {
+      "ref": "U1",
+      "type": "OPAMP",
+      "value": 1000000.0,
+      "pins": {
+        "1": "P",
+        "2": "OUT",
+        "3": "VCC",
+        "4": "VEE",
+        "5": "OUT"
+      }
+    },
+    {
+      "ref": "V2",
+      "type": "V",
+      "value": 0.0,
+      "pins": {
+        "1": "VCC",
+        "2": "GND"
+      },
+      "dc": 5.0
+    },
+    {
+      "ref": "V3",
+      "type": "V",
+      "value": 0.0,
+      "pins": {
+        "1": "VEE",
+        "2": "GND"
+      },
+      "dc": -5.0
+    }
+  ],
+  "analyses": [
+    {
+      "type": "op"
+    },
+    {
+      "type": "ac",
+      "start": 10.0,
+      "stop": 1000000.0,
+      "points": 300
+    }
+  ],
+  "deliverables": [
+    "bom",
+    "kicad_net",
+    "kicad_sch",
+    "ltspice_asc",
+    "report",
+    "spice"
+  ],
+  "assumptions": [
+    "Unity-gain follower",
+    "Ideal op-amp; GBW and slew rate must be checked against the chosen part",
+    "Component values are ideal; use 1% resistors and 5% C0G capacitors"
+  ],
+  "models": {},
+  "notes": [],
+  "environment": {
+    "ta_c": 25.0,
+    "tj_max_c": 125.0
+  },
+  "verification": {
+    "tolerance_percent": 2.0
+  }
+}
