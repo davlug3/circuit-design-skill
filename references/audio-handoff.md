@@ -25,14 +25,24 @@ The audio skill emits `handoff.json`:
   "application": "microphone preamplifier",
   "conditions": {"input_vrms": 0.002, "frequency_hz": 1000, "load_ohm": 10000},
   "requirements": [
-    {"id": "A1", "text": "Flat gain", "acceptance": "40 +/-0.5 dB, 20 Hz-20 kHz", "source": "S012"}
+    {"id": "A1", "text": "Flat gain", "acceptance": "40 +/-0.5 dB, 20 Hz-20 kHz", "source": "S041"},
+    {"id": "A2", "text": "Input-referred noise", "acceptance": "<= 1.0 uV RMS, 20 Hz-20 kHz, 150 Ohm source", "source": "S045"}
   ],
   "metrics": [
-    {"measure": "gain_db", "target": 40.0, "tolerance": 0.5, "requirement": "A1"}
+    {"measure": "gain_db", "target": 40.0, "tolerance": 0.5, "requirement": "A1"},
+    {"measure": "ein_uv", "target": 1.0, "tolerance": 0.0, "requirement": "A2"}
   ],
-  "sources": [{"id": "S012", "title": "...", "url": "https://...", "accessed": "2026-11-08"}]
+  "sources": [
+    {"id": "S041", "title": "RaneNote 145: Audio Specifications", "url": "https://www.ranecommercial.com/legacy/note145.html", "accessed": "2026-11-08"},
+    {"id": "S045", "title": "Noise in Audio Amplifiers", "url": "https://sound-au.com/noise.htm", "accessed": "2026-11-08"}
+  ]
 }
 ```
+
+Source ids refer to the sibling audio registry. They must be `verified` there,
+and the condition in each acceptance limit must be carried into the analysis or
+metric block. The examples above use S041 and S045, which are verified in the
+audio registry at the time of writing.
 
 Merge mapping:
 
