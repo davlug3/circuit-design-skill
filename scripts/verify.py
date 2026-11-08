@@ -13,10 +13,14 @@ Verification is layered, and every layer says exactly what it proved:
 4. **ngspice** - if installed *and compatible*, the generated netlist is
    simulated.  Without ngspice, nonlinear circuits are reported as *not
    simulated*, never as passing.
-5. **KiCad ERC** - with ``--erc``, KiCad's own electrical rules run when
+5. **Metrics** - gain, bandwidth, THD, noise and RMS level are extracted from
+   the ngspice rawfile and compared with the declared ``metrics`` targets.
+   Missing ngspice is a skip; a declared metric that cannot be evaluated is a
+   failure, never a silent pass.
+6. **KiCad ERC** - with ``--erc``, KiCad's own electrical rules run when
    ``kicad-cli`` is installed and compatible.  Missing tools are a skip, not a
    pass; ``--require`` turns a skip in a required stage into a failure.
-6. **Provenance** - the result records whether it came from this machine or
+7. **Provenance** - the result records whether it came from this machine or
    from CI, plus the commit and run id when running in GitHub Actions.
 
 Generic device models are placeholders.  A structural pass is not a promise
@@ -46,6 +50,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import env_probe  # noqa: E402
 import generate as gen  # noqa: E402
+import metrics as metric_lib  # noqa: E402
+import ngspice_raw  # noqa: E402
 from circuit_common import dumps, si_number, spice_number, spice_ref  # noqa: E402
 from design_spec import (  # noqa: E402
     BOARDABLE_TYPES,
@@ -760,52 +766,17 @@ def check_pcb_handoff(spec: dict[str, Any], out: Path) -> Check:
     )
 
 
-def _parse_ascii_raw(text: str) -> dict[str, dict[str, Any]]:
-    """Parse ngspice's ASCII rawfile into {plotname: {vars, values}}."""
-    plots: dict[str, dict[str, Any]] = {}
-    current: dict[str, Any] | None = None
-    lines = text.splitlines()
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        if line.startswith("Plotname:"):
-            current = {"vars": [], "values": []}
-            plots[line.split(":", 1)[1].strip()] = current
-        elif current is not None and line.startswith("Variables:"):
-            i += 1
-            while i < len(lines) and lines[i].strip() and not lines[i].startswith("Values:"):
-                parts = lines[i].split()
-                if len(parts) >= 2:
-                    current["vars"].append(parts[1])
-                i += 1
-            continue
-        elif current is not None and line.startswith("Values:"):
-            i += 1
-            while i < len(lines):
-                stripped = lines[i].strip()
-                if not stripped or stripped.startswith("Plotname:"):
-                    break
-                parts = stripped.split()
-                if len(parts) >= 2 and parts[0].lstrip("-").isdigit():
-                    current["values"].append(parts[1])
-                elif len(parts) == 1:
-                    current["values"].append(parts[0])
-                i += 1
-            continue
-        i += 1
-    return plots
-
-
-def _run_ngspice(netlist: Path) -> Check:
+def _simulate_ngspice(netlist: Path) -> tuple[Check, dict[str, ngspice_raw.Plot], str]:
+    """Run ngspice and return its check, parsed plots and combined log text."""
     capability = env_probe.probe_ngspice()
     if not capability.get("supported"):
         if capability.get("ok"):
             return Check("ngspice", None,
                          "ngspice is installed but incompatible with this machine ("
                          + capability.get("detail", "no reason reported")
-                         + "); nonlinear devices were not simulated")
+                         + "); nonlinear devices were not simulated"), {}, ""
         return Check("ngspice", None,
-                     "ngspice is not installed; nonlinear devices were not simulated")
+                     "ngspice is not installed; nonlinear devices were not simulated"), {}, ""
     exe = capability.get("path")
     with tempfile.TemporaryDirectory() as td:
         log = Path(td) / "ngspice.log"
@@ -820,7 +791,7 @@ def _run_ngspice(netlist: Path) -> Check:
                 env={**os.environ, "SPICE_ASCIIRAWFILE": "1"},
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
-            return Check("ngspice", False, f"ngspice could not run: {exc}")
+            return Check("ngspice", False, f"ngspice could not run: {exc}"), {}, ""
         log_text = log.read_text(errors="replace") if log.exists() else ""
         text = log_text + proc.stdout + proc.stderr
         evidence = {
@@ -830,26 +801,26 @@ def _run_ngspice(netlist: Path) -> Check:
             "log": log_text[-3000:],
         }
         if "singular matrix" in text.lower() or "doanalyses: iteration limit reached" in text.lower():
-            return Check("ngspice", False, "ngspice reported a singular matrix or non-convergence",
-                         evidence)
+            return Check("ngspice", False,
+                         "ngspice reported a singular matrix or non-convergence",
+                         evidence), {}, text
         if proc.returncode != 0:
             return Check("ngspice", False, f"ngspice exited with {proc.returncode}",
-                         evidence)
+                         evidence), {}, text
 
         # Parse the ASCII rawfile. A completed run with plots is evidence even
         # when the operating-point table is not printable.
         raw_text = raw.read_text(errors="replace") if raw.exists() else ""
-        plots = _parse_ascii_raw(raw_text)
+        plots = ngspice_raw.parse_raw(raw_text)
         voltages: dict[str, float] = {}
-        for plot_name, plot in plots.items():
-            if "operating point" not in plot_name.lower():
-                continue
-            for var, value in zip(plot["vars"], plot["values"]):
+        op_plot = ngspice_raw.find_plot(plots, "op")
+        if op_plot is not None and op_plot.points:
+            for var, value in zip(op_plot.variables, op_plot.points[0]):
                 if not var.lower().startswith("v("):
                     continue
                 try:
                     voltages[var[2:-1]] = float(value)
-                except ValueError:
+                except (TypeError, ValueError):
                     pass
         if plots:
             detail = (f"ngspice ran {len(plots)} analysis plot(s): "
@@ -859,7 +830,7 @@ def _run_ngspice(netlist: Path) -> Check:
                     f"V({k})={v:.6g}" for k, v in voltages.items())
             return Check("ngspice", True, detail,
                          {**evidence, "plots": list(plots),
-                          "node_voltages_V": voltages})
+                          "node_voltages_V": voltages}), plots, text
 
         # Fall back to the printed table when a rawfile was not produced.
         in_table = False
@@ -882,10 +853,58 @@ def _run_ngspice(netlist: Path) -> Check:
             return Check("ngspice", True,
                          "ngspice ran and reported " +
                          ", ".join(f"V({k})={v:.6g}" for k, v in voltages.items()),
-                         {"node_voltages_V": voltages})
+                         {"node_voltages_V": voltages}), {}, text
         return Check("ngspice", None,
                      "ngspice completed but its output format could not be parsed; "
-                     "see the log for the raw result", {"log": text[-2000:]})
+                     "see the log for the raw result", {"log": text[-2000:]}), {}, text
+
+
+def _run_ngspice(netlist: Path) -> Check:
+    """Backward-compatible wrapper for callers that only need the check."""
+    check, _, _ = _simulate_ngspice(netlist)
+    return check
+
+
+def check_metrics(spec: dict[str, Any], plots: dict[str, ngspice_raw.Plot],
+                  log_text: str, ngspice_check: Check) -> Check | None:
+    """Evaluate declared metrics, or return None when none are declared.
+
+    A metric that cannot be evaluated is a failure once ngspice has run.  When
+    ngspice is unavailable the metric check is a skip, matching the rest of the
+    pipeline's "never call a skip a pass" rule.
+    """
+    block = spec.get("metrics") or {}
+    items = block.get("metrics") if isinstance(block, dict) else None
+    if not items:
+        return None
+    if ngspice_check.ok is None:
+        return Check("metrics", None,
+                     "ngspice unavailable; declared metrics were not evaluated")
+    if ngspice_check.ok is False:
+        return Check("metrics", False,
+                     "ngspice failed; declared metrics were not evaluated")
+    results, errors = metric_lib.evaluate(block, plots, log_text)
+    if errors:
+        return Check("metrics", False, "; ".join(errors),
+                     {"metrics": [result.as_dict() for result in results]})
+    if not results:
+        return Check("metrics", False, "no metrics could be evaluated")
+    verdicts: list[str] = []
+    failed = False
+    enriched: list[dict[str, Any]] = []
+    for result in results:
+        ok, rule = metric_lib.compare(result.metric, result.value)
+        record = result.as_dict()
+        record.update({"ok": ok, "rule": rule})
+        enriched.append(record)
+        mark = "PASS" if ok is True else "FAIL" if ok is False else "INFO"
+        verdicts.append(
+            f"{record['id'] or record['measure']}: {record['measure']}="
+            f"{record['value']:.6g} {record['unit']} ({mark}; {rule})")
+        if ok is False:
+            failed = True
+    return Check("metrics", not failed, "; ".join(verdicts),
+                 {"metrics": enriched, "conditions": block.get("conditions", {})})
 
 
 def check_models(spec: dict[str, Any],
@@ -1142,7 +1161,16 @@ def verify(spec_path: str | Path, outdir: str | Path,
     checks.extend(check_mna(spec))
 
     if paths["spice"].exists():
-        checks.append(_run_ngspice(paths["spice"]))
+        ngspice_check, plots, simulation_text = _simulate_ngspice(paths["spice"])
+        checks.append(ngspice_check)
+        metrics_check = check_metrics(spec, plots, simulation_text, ngspice_check)
+        if metrics_check is not None:
+            checks.append(metrics_check)
+    elif isinstance(spec.get("metrics"), dict) and spec["metrics"].get("metrics"):
+        checks.append(Check(
+            "metrics", False,
+            'metrics are declared but no SPICE netlist was generated; add "spice" '
+            "to deliverables"))
     if erc and paths["kicad_sch"].exists():
         checks.append(check_kicad_erc(paths["kicad_sch"], out))
 

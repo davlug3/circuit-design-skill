@@ -68,6 +68,48 @@ jobs:
           PYTHONDONTWRITEBYTECODE: "1"
         run: python -m unittest discover -s tests -v
 
+  cross-repo:
+    name: Audio handoff merge
+    needs: tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out the audio skill
+        uses: actions/checkout@v4
+        with:
+          repository: davlug3/audio-engineering-skill
+          path: audio-engineering-skill
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate the audio handoff
+        run: |
+          python audio-engineering-skill/scripts/source_check.py \
+            --root audio-engineering-skill --strict \
+            --handoff audio-engineering-skill/examples/mic-preamp-handoff.json
+
+      - name: Merge and validate the circuit spec
+        run: |
+          set -euo pipefail
+          mkdir -p out-cross
+          python scripts/audio_handoff.py \
+            --handoff audio-engineering-skill/examples/mic-preamp-handoff.json \
+            --base examples/mic-preamp-base.json \
+            --map examples/mic-preamp-map.json \
+            --out out-cross/mic-preamp-merged.json
+          python scripts/design_spec.py validate out-cross/mic-preamp-merged.json
+
+      - name: Upload the merged spec
+        uses: actions/upload-artifact@v4
+        with:
+          name: audio-handoff-merge
+          path: out-cross/
+          if-no-files-found: warn
+          retention-days: 30
+
   verify:
     name: Generate and verify
     needs: tests
@@ -102,6 +144,15 @@ jobs:
           python scripts/verify.py "$SPEC" --out out --json \
             --require "$REQUIRE" $ERC | tee verification.json
 
+      - name: Verify gain and bandwidth metrics
+        env:
+          CIRCUIT_BACKEND: ci
+        run: |
+          set -euo pipefail
+          python scripts/verify.py examples/rc-lowpass-metrics.json \
+            --out out-metrics --json --require simulate \
+            | tee metrics-verification.json
+
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -109,7 +160,9 @@ jobs:
           name: circuit-verification
           path: |
             out/
+            out-metrics/
             verification.json
+            metrics-verification.json
           if-no-files-found: warn
           retention-days: 30
 

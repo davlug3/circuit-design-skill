@@ -299,7 +299,8 @@
               "tran",
               "dc",
               "noise",
-              "tf"
+              "tf",
+              "fourier"
             ]
           },
           "start": {
@@ -316,6 +317,13 @@
           },
           "source": {
             "type": "string"
+          },
+          "output": {
+            "type": "string"
+          },
+          "fundamental": {
+            "type": "number",
+            "exclusiveMinimum": 0
           },
           "vstart": {
             "type": "number"
@@ -420,6 +428,99 @@
               },
               "tolerance_percent": {
                 "type": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "description": "Generic gain, bandwidth, THD, noise and RMS targets. Audio-specific conditions and limits can be supplied by the sibling audio skill.",
+      "properties": {
+        "conditions": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "metrics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "measure"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "measure": {
+                "enum": [
+                  "gain_db",
+                  "bandwidth_hz",
+                  "bandwidth_low_hz",
+                  "bandwidth_width_hz",
+                  "thd_percent",
+                  "ein_uv",
+                  "noise_uv",
+                  "output_vrms"
+                ]
+              },
+              "requirement": {
+                "type": "string"
+              },
+              "analysis": {
+                "enum": [
+                  "ac",
+                  "tran",
+                  "noise",
+                  "fourier"
+                ]
+              },
+              "output": {
+                "type": "string"
+              },
+              "input": {
+                "type": "string"
+              },
+              "frequency": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "fundamental": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "harmonics": {
+                "type": "integer",
+                "minimum": 2
+              },
+              "start": {
+                "type": "number",
+                "minimum": 0
+              },
+              "stop": {
+                "type": "number",
+                "minimum": 0
+              },
+              "target": {
+                "type": "number"
+              },
+              "tolerance": {
+                "type": "number",
+                "minimum": 0
+              },
+              "min": {
+                "type": "number"
+              },
+              "max": {
+                "type": "number"
+              },
+              "unit": {
+                "type": "string"
+              },
+              "exploratory": {
+                "type": "boolean",
+                "default": false
               }
             }
           }

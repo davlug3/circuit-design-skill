@@ -57,16 +57,102 @@ Merge mapping:
 
 The spec must reject a metric whose `requirement` id is absent.
 
+### From handoff to metrics
+
+The handoff says **what** to measure; the circuit spec needs the electrical
+test point. The merge adds these fields to each metric:
+
+- `analysis` and the matching entry in `analyses[]` (`ac`, `tran`, `noise`, or
+  `fourier`);
+- `output` and, for gain and bandwidth, `input` rawfile variables such as
+  `v(out)` and `v(in)`;
+- `frequency` for `gain_db`, `fundamental` for `thd_percent`, and
+  `start`/`stop` for `output_vrms` when the default window is not appropriate;
+- a stable `id`;
+- the shared test conditions under `metrics.conditions`.
+
+Example merged block:
+
+```json
+{
+  "analyses": [
+    {"type": "ac", "start": 10, "stop": 100000, "points": 200},
+    {"type": "noise", "output": "OUT", "source": "V1",
+     "start": 20, "stop": 20000, "points": 100}
+  ],
+  "metrics": {
+    "conditions": {"input_vrms": 0.002, "frequency_hz": 1000,
+                   "load_ohm": 10000, "source_impedance_ohm": 150},
+    "metrics": [
+      {"id": "M1", "measure": "gain_db", "requirement": "A1",
+       "analysis": "ac", "output": "v(out)", "input": "v(in)",
+       "frequency": 1000, "target": 40.0, "tolerance": 0.5},
+      {"id": "M2", "measure": "ein_uv", "requirement": "A2",
+       "analysis": "noise", "output": "v(out)", "max": 1.0}
+    ]
+  }
+}
+```
+
+The merged spec is validated by `scripts/design_spec.py`: a metric with a
+missing analysis, a missing `output`/`input`, no target or limit, or an unknown
+`requirement` is rejected before simulation.
+
+The circuit skill ships `scripts/audio_handoff.py` to perform the merge:
+
+```bash
+python3 scripts/audio_handoff.py \
+  --handoff ../audio-engineering-skill/examples/mic-preamp-handoff.json \
+  --base examples/mic-preamp-base.json \
+  --map examples/mic-preamp-map.json \
+  --out out/mic-preamp-merged.json
+```
+
+- `--base` is the circuit implementation: components, analyses and
+  deliverables. `examples/mic-preamp-base.json` is an integration fixture, not
+  a complete microphone preamplifier.
+- `--map` supplies the electrical test points the audio handoff cannot know:
+
+```json
+{
+  "metrics": [
+    {"measure": "gain_db", "requirement": "A1", "id": "M1",
+     "analysis": "ac", "output": "v(out)", "input": "v(in)",
+     "frequency": 1000},
+    {"measure": "ein_uv", "requirement": "A2", "id": "M2",
+     "analysis": "noise", "output": "v(out)"}
+  ]
+}
+```
+
+The mapping is keyed by `(measure, requirement)`, so handoff order does not
+matter. Every handoff metric must have one mapping entry, and every metric must
+match the analysis required by its measure. The merge fails on a version
+mismatch, an unsupported measure, a duplicate mapping, a missing requirement,
+or a target without a tolerance. The merged spec is validated before it is
+written.
+
+The circuit skill's CI has a cross-repo job that checks out both repositories,
+validates the audio handoff with the audio skill's own linter, merges
+`examples/mic-preamp-handoff.json`, and validates the resulting spec.
+
 ## Status
 
 - Contract defined and published by the audio skill.
-- The generic `metrics` verification stage (gain, bandwidth, THD, noise) is
-  **not implemented yet**. Until it is, audio targets are planning data, not a
-  verified result. Do not report them as measured or simulated.
+- The generic `metrics` stage is implemented. It extracts gain, bandwidth,
+  THD, input/output noise and output RMS from the ngspice rawfile and log, and
+  compares them with the merged targets. See `references/metrics.md`.
+- The cross-repo merge is implemented in `scripts/audio_handoff.py` and
+  exercised by CI.
+- A metric is still a **simulation result**, not a bench measurement or a
+  perceptual claim. State the model provenance and the test conditions.
 - The audio skill validates the handoff with
   `source_check.py --strict --handoff <file>`; every requirement source must be
   verified and listed, and every metric must reference an existing requirement.
   The sibling repo ships `examples/mic-preamp-handoff.json`.
+- The circuit skill's CI verifies `examples/rc-lowpass-metrics.json` with
+  ngspice and requires the `simulate` stage, so the metric path is exercised
+  end to end on a real simulator.
 
 ## Locating the sibling
 

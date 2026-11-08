@@ -259,6 +259,9 @@ The verifier re-reads the generated files and checks:
 - linear circuits solve in the independent MNA solver and match closed-form
   expectations;
 - `ngspice` runs the netlist if it is installed and compatible;
+- declared gain, bandwidth, THD, noise or RMS metrics are extracted from the
+  ngspice rawfile and compared with their targets or limits (see
+  `references/metrics.md`);
 - every semiconductor resolves to a real, traceable model, or is reported as
   a generic placeholder (add `--require models` to make that a failure);
 - the `design` record has requirements, an architecture, sourced decisions,
@@ -266,7 +269,8 @@ The verifier re-reads the generated files and checks:
 - KiCad ERC runs with `--erc` when `kicad-cli` is installed and compatible.
 
 Read `references/verification.md` for what each check proves and what it does
-not.
+not, and `references/metrics.md` for the metric block, analysis requirements
+and limits.
 
 #### When the local machine cannot run a check
 
@@ -342,16 +346,21 @@ scripts/symbols.py           LTspice and KiCad symbol geometry
 scripts/generate.py          .cir, .asc, .net, .kicad_sch, BOM, report
 scripts/model_fetch.py       find, validate, hash and ingest a SPICE model
 scripts/pcb_handoff.py       overlay, pin map, node aliases, handoff document
-scripts/verify.py            structural, MNA, ERC, model and design checks
+scripts/ngspice_raw.py       ASCII rawfile parser: plots, variables, complex data
+scripts/metrics.py           gain, bandwidth, THD, noise and RMS extraction
+scripts/audio_handoff.py     merge an audio handoff and test-point map
+scripts/verify.py            structural, MNA, metrics, ERC, model and design checks
 scripts/env_probe.py         capability probe: ok / incompatible / missing
 scripts/ci_dispatch.py       GitHub Actions dispatch with safety checks
 .github/workflows/design.yml  unit tests, KiCad 9 + ngspice verification
 references/                  planning and research, part selection, intake,
                              topologies, analog, digital, power,
                              physics/reliability, LTspice, KiCad, PCB handoff,
-                             models, verification
+                             models, metrics, verification
 templates/                   design plan, decision record, research log
-examples/                    ready-to-run specs, including rc-lowpass-pcb.json
+examples/                    ready-to-run specs, including rc-lowpass-pcb.json,
+                             rc-lowpass-metrics.json and the audio handoff
+                             fixtures
 tests/                       unit and end-to-end tests
 ```
 

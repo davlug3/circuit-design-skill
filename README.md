@@ -289,8 +289,55 @@ electrical implementation.
 This skill does not hold audio-specific knowledge or decide what sounds good.
 A simulation is not a measurement, and an audio target is not a verified
 result. The contract, merge mapping and current status are in
-`references/audio-handoff.md`. The generic `metrics` stage for gain, bandwidth,
-THD and noise is not implemented yet.
+`references/audio-handoff.md`. The generic `metrics` stage is implemented; see
+`references/metrics.md`.
+
+Merge a handoff with the electrical test-point map:
+
+```bash
+python3 scripts/audio_handoff.py \
+  --handoff ../audio-engineering-skill/examples/mic-preamp-handoff.json \
+  --base examples/mic-preamp-base.json \
+  --map examples/mic-preamp-map.json \
+  --out out/mic-preamp-merged.json
+```
+
+CI checks out both repositories, validates the handoff with the audio skill's
+linter, merges it and validates the resulting spec.
+
+## Metrics
+
+A spec can declare the electrical result it expects. `verify.py` extracts it
+from the ngspice rawfile and log and fails when a target or limit is missed.
+
+```json
+"analyses": [
+  {"type": "ac", "start": 10, "stop": 100000, "points": 200}
+],
+"metrics": {
+  "conditions": {"temperature_c": 25, "load_ohm": 10000},
+  "metrics": [
+    {"id": "M1", "measure": "gain_db", "requirement": "A1",
+     "output": "v(out)", "input": "v(in)", "frequency": 1000,
+     "target": 40.0, "tolerance": 0.5},
+    {"id": "M2", "measure": "bandwidth_hz", "requirement": "A1",
+     "output": "v(out)", "input": "v(in)", "min": 20000}
+  ]
+}
+```
+
+Supported measures are AC gain, upper/lower/width bandwidth, THD from a
+`.four` analysis, input/output-referred noise from `.noise`, and transient RMS.
+Each metric must reference a requirement in `design.requirements`, and the
+matching analysis must be present in `analyses`.
+
+```bash
+python3 scripts/verify.py examples/rc-lowpass-metrics.json --out out/ \
+  --require simulate
+```
+
+Without ngspice the metrics check is a `SKIP`; `--require simulate` makes that
+a failure. Read `references/metrics.md` for definitions, conditions and limits.
 
 ## Tests
 
@@ -299,7 +346,8 @@ python3 -m unittest discover -s tests -v
 ```
 
 The tests cover value parsing, the calculators, the MNA solver, generation,
-verification, model fetch/ingestion, the design record and the PCB handoff.
+verification, rawfile parsing, gain/bandwidth/THD/noise metrics, model
+fetch/ingestion, the design record and the PCB handoff.
 The KiCad parse test is skipped when `kiutils` is not installed; the
 sibling-PCB integration test is skipped when `pcb-design-skill` is not
 installed.

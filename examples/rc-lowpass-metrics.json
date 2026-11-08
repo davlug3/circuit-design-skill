@@ -1,0 +1,175 @@
+{
+  "schema_version": "1.0",
+  "name": "rc_lowpass_metrics",
+  "description": "RC low-pass filter, 1.59 kHz, with explicit gain and bandwidth metrics",
+  "topology": "rc_lowpass",
+  "ground": "GND",
+  "supplies": [],
+  "parameters": {
+    "r": 1000.0,
+    "c": 1.0000000000000001e-07
+  },
+  "design": {
+    "requirements": [
+      {
+        "id": "R1",
+        "text": "-3 dB corner at 1.59 kHz",
+        "acceptance": "AC sweep; -3 dB within +/-2%",
+        "source": "circuit_calc.py rc --r 1k --c 100n"
+      },
+      {
+        "id": "R2",
+        "text": "No gain; 1 V input, open output",
+        "acceptance": "DC gain 0 dB",
+        "source": "example brief"
+      }
+    ],
+    "architecture": {
+      "summary": "First-order passive RC low-pass, driven by a zero-impedance source",
+      "blocks": [
+        "series resistor",
+        "shunt capacitor"
+      ],
+      "interfaces": [
+        "1 V input",
+        "filtered output",
+        "common ground"
+      ],
+      "budgets": {
+        "corner": "1.59 kHz",
+        "input impedance": "1 kohm at low frequency"
+      },
+      "test_points": [
+        "IN",
+        "OUT"
+      ]
+    },
+    "decisions": [
+      {
+        "id": "D1",
+        "decision": "passive RC instead of an active filter",
+        "alternatives": [
+          "Sallen-Key active low-pass"
+        ],
+        "rationale": "no gain or buffering is required and the source is ideal",
+        "sources": [
+          "example assumptions in this spec"
+        ]
+      }
+    ],
+    "risks": [
+      {
+        "id": "K1",
+        "risk": "load capacitance or resistance shifts the corner",
+        "severity": "medium",
+        "mitigation": "state the load, or buffer the output",
+        "verification": "AC sweep with the actual load attached"
+      }
+    ],
+    "sources": [
+      {
+        "title": "First-order RC low-pass response",
+        "document": "H(s) = 1 / (1 + sRC), derived and evaluated by circuit_calc.py",
+        "revision": "n/a",
+        "accessed": "2026-11-08"
+      }
+    ]
+  },
+  "components": [
+    {
+      "ref": "V1",
+      "type": "V",
+      "value": 0.0,
+      "pins": {
+        "1": "IN",
+        "2": "GND"
+      },
+      "dc": 1.0,
+      "ac": 1.0
+    },
+    {
+      "ref": "R1",
+      "type": "R",
+      "value": 1000.0,
+      "pins": {
+        "1": "IN",
+        "2": "OUT"
+      }
+    },
+    {
+      "ref": "C1",
+      "type": "C",
+      "value": 1.0000000000000001e-07,
+      "pins": {
+        "1": "OUT",
+        "2": "GND"
+      }
+    }
+  ],
+  "analyses": [
+    {
+      "type": "op"
+    },
+    {
+      "type": "ac",
+      "start": 10.0,
+      "stop": 1000000.0,
+      "points": 200
+    }
+  ],
+  "deliverables": [
+    "bom",
+    "kicad_net",
+    "kicad_sch",
+    "ltspice_asc",
+    "report",
+    "spice"
+  ],
+  "assumptions": [
+    "R = 1 kohm, C = 100 nF",
+    "Source impedance is zero and load is open",
+    "Ideal components; no parasitic ESR/ESL"
+  ],
+  "models": {},
+  "notes": [],
+  "environment": {
+    "ta_c": 25.0,
+    "tj_max_c": 125.0
+  },
+  "verification": {
+    "tolerance_percent": 2.0
+  },
+  "metrics": {
+    "conditions": {
+      "temperature_c": 25.0,
+      "input_vrms": 1.0,
+      "load_ohm": "open",
+      "source_impedance_ohm": 0.0
+    },
+    "metrics": [
+      {
+        "id": "M1",
+        "measure": "gain_db",
+        "requirement": "R2",
+        "analysis": "ac",
+        "output": "v(out)",
+        "input": "v(in)",
+        "frequency": 1000.0,
+        "target": -1.4451,
+        "tolerance": 0.01,
+        "unit": "dB"
+      },
+      {
+        "id": "M2",
+        "measure": "bandwidth_hz",
+        "requirement": "R1",
+        "analysis": "ac",
+        "output": "v(out)",
+        "input": "v(in)",
+        "target": 1591.55,
+        "tolerance": 31.83,
+        "unit": "Hz"
+      }
+    ]
+  }
+}

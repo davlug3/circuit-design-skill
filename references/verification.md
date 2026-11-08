@@ -14,6 +14,7 @@ written down.
 | PCB handoff | Overlay, pin map and aliases agree with the netlist | Layout, DRC, DFM, real pads |
 | MNA (linear) | Exact DC/AC solution of the linear model | Nonlinear devices, parasitics, layout |
 | ngspice | The generated netlist runs and converges | Real-device behaviour if models are generic |
+| Metrics | Gain, bandwidth, THD, noise or RMS matched a declared target | A bench measurement, perceptual quality, or anything outside the model |
 | KiCad ERC | KiCad's own electrical rules accept the schematic | Layout, DRC, DFM, real pads |
 | CI (GitHub Actions) | The same checks ran at a known commit in a pinned image | That this machine can run them; bench behaviour |
 | Vendor model | The simulation uses a named part with recorded vendor/source/hash | That the model matches your reel |
@@ -63,19 +64,25 @@ python3 scripts/verify.py specs/rc.json --out out/ --json
    batch mode. A singular matrix or non-convergence is a failure. If the output
    format cannot be parsed, the check is skipped and the raw log is attached; an
    unparsed run is not evidence.
-10. **KiCad ERC** — with `--erc`, runs `kicad-cli sch erc --severity-error
+10. **Metrics** — after ngspice runs, extracts the declared `gain_db`,
+    bandwidth, `thd_percent`, `ein_uv`/`noise_uv` or `output_vrms` values from
+    the rawfile and log, and compares them with the metric's target or limit.
+    A metric that cannot be evaluated after ngspice ran is a failure. If
+    ngspice is unavailable the whole check is a `SKIP`; `--require simulate`
+    turns that into a failure. See `references/metrics.md`.
+11. **KiCad ERC** — with `--erc`, runs `kicad-cli sch erc --severity-error
     --exit-code-violations`. Exit code 5 means error-level violations and is a
     failure; any other non-zero code is a tool error, not a clean pass. The
     report is written next to the output as `<name>-erc.rpt`.
-11. **Required stages** — `--require simulate,erc,kicad-parse,models,design`
+12. **Required stages** — `--require simulate,erc,kicad-parse,models,design`
     converts a `SKIP` in a required stage into a failure. This is what CI uses
     so a missing tool, a generic transistor, or an unrecorded decision cannot
     masquerade as a pass.
-12. **Models** — resolves every semiconductor to its declared card. Generic
+13. **Models** — resolves every semiconductor to its declared card. Generic
     placeholders and declarations without vendor/part/source are reported as
     `SKIP` (not pass); a missing model file, a hash mismatch or a missing
     `subckt_pins` order is a validation failure.
-13. **Design record** — checks that `design` contains requirements, an
+14. **Design record** — checks that `design` contains requirements, an
     architecture summary or blocks, decisions, risks and sources. A decision
     with neither a source nor a rationale, or a high risk without a mitigation
     and a verification, is a `SKIP`; `--require design` turns that into a
@@ -133,6 +140,14 @@ PASS: rc_lowpass (9 passed, 1 skipped, 0 failed)
   [PASS] rc_corner: -3 dB at 1.59118 kHz, closed form 1.59155 kHz
   [PASS] mna_ac: AC solve is finite
   [SKIP] ngspice: ngspice is not installed; nonlinear devices were not simulated
+  [SKIP] metrics: ngspice unavailable; declared metrics were not evaluated
+```
+
+With ngspice available, the metrics check reports each value and rule, for
+example:
+
+```
+  [PASS] metrics: M1: gain_db=-1.44507 dB (PASS; target -1.4451 +/- 0.01); M2: bandwidth_hz=1591.3 Hz (PASS; target 1591.55 +/- 31.83)
 ```
 
 - **PASS** — the check ran and the assertion held.
@@ -194,6 +209,9 @@ Even with a full pass:
 
 - Read the datasheet for every semiconductor, connector and power part.
 - Check the current revision and the errata, not a remembered version.
+- Check every metric's condition: frequency, bandwidth, input level, source
+  impedance, load and weighting. A number without its condition is not a
+  specification. See `references/metrics.md`.
 - Check the absolute maximum ratings at the worst-case temperature.
 - Check the pinout against the package drawing.
 - Check the footprint pad numbering against the logical pin numbering.

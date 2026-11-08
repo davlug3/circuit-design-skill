@@ -362,6 +362,13 @@ def analyses_to_spice(analyses: list[dict[str, Any]]) -> list[str]:
             output = analysis.get("output", "OUT")
             source = analysis.get("source", "V1")
             out.append(f".tf v({output}) {source}")
+        elif atype == "fourier":
+            fundamental = float(analysis.get("fundamental", 1000.0))
+            output = analysis.get("output", "v(out)")
+            text = str(output)
+            if "(" not in text:
+                text = f"v({text})"
+            out.append(f".four {_fmt(fundamental)} {text}")
         else:
             raise ValueError(f"unsupported analysis type {atype!r}")
     return out

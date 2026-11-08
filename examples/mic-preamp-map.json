@@ -1,0 +1,20 @@
+{
+  "metrics": [
+    {
+      "measure": "gain_db",
+      "requirement": "A1",
+      "id": "M1",
+      "analysis": "ac",
+      "output": "v(out)",
+      "input": "v(in)",
+      "frequency": 1000.0
+    },
+    {
+      "measure": "ein_uv",
+      "requirement": "A2",
+      "id": "M2",
+      "analysis": "noise",
+      "output": "v(out)"
+    }
+  ]
+}

@@ -48,6 +48,30 @@ DELIVERABLES = {"spice", "ltspice_asc", "kicad_net", "kicad_sch", "bom", "report
 OPTIONAL_DELIVERABLES = {"pcb"}
 ALL_DELIVERABLES = DELIVERABLES | OPTIONAL_DELIVERABLES
 
+# Generic metric extraction.  The audio skill supplies the targets and
+# conditions; this table maps each measure to the ngspice analysis that must
+# be present in the design spec.
+METRIC_MEASURES = {
+    "gain_db",
+    "bandwidth_hz",
+    "bandwidth_low_hz",
+    "bandwidth_width_hz",
+    "thd_percent",
+    "ein_uv",
+    "noise_uv",
+    "output_vrms",
+}
+METRIC_ANALYSIS = {
+    "gain_db": "ac",
+    "bandwidth_hz": "ac",
+    "bandwidth_low_hz": "ac",
+    "bandwidth_width_hz": "ac",
+    "thd_percent": "fourier",
+    "ein_uv": "noise",
+    "noise_uv": "noise",
+    "output_vrms": "tran",
+}
+
 BOARDABLE_TYPES = {"R", "C", "L", "D", "LED", "ZENER",
                    "NPN", "PNP", "NMOS", "PMOS", "OPAMP"}
 MULTIPIN_TYPES = {"NPN", "PNP", "NMOS", "PMOS", "OPAMP", "SW"}
@@ -389,6 +413,7 @@ def normalize_spec(spec: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     out.setdefault("models", {})
     out.setdefault("assumptions", [])
     out.setdefault("notes", [])
+    out.setdefault("metrics", {})
 
     comps = []
     for comp in spec.get("components", []):
@@ -907,6 +932,183 @@ def validate_design_record(design: Any) -> tuple[list[str], list[str]]:
     return errors, warnings
 
 
+def _metric_variable(value: Any) -> str:
+    text = str(value).strip().lower()
+    if "(" not in text:
+        return f"v({text})"
+    return text
+
+
+def validate_metrics(metrics: Any, analyses: list[dict[str, Any]],
+                     design: Any) -> tuple[list[str], list[str]]:
+    """Validate the generic metric block and its analysis/requirement links."""
+    errors: list[str] = []
+    warnings: list[str] = []
+    if metrics in (None, {}):
+        return errors, warnings
+    if not isinstance(metrics, dict):
+        return ["metrics must be an object"], warnings
+    extra = set(metrics) - {"conditions", "metrics"}
+    if extra:
+        warnings.append(f"metrics has unknown key(s): {', '.join(sorted(extra))}")
+    items = metrics.get("metrics")
+    if not isinstance(items, list) or not items:
+        return ["metrics.metrics must be a non-empty list"], warnings
+
+    analysis_by_type = {
+        item.get("type"): item for item in analyses
+        if isinstance(item, dict) and item.get("type")
+    }
+    requirements = design.get("requirements") if isinstance(design, dict) else None
+    requirement_ids = {
+        item.get("id") for item in requirements
+        if isinstance(item, dict) and isinstance(item.get("id"), str)
+    } if isinstance(requirements, list) else set()
+    seen_ids: set[str] = set()
+
+    for index, metric in enumerate(items):
+        where = f"metrics.metrics[{index}]"
+        if not isinstance(metric, dict):
+            errors.append(f"{where} must be an object")
+            continue
+        measure = metric.get("measure")
+        if measure not in METRIC_MEASURES:
+            errors.append(
+                f"{where}: unknown measure {measure!r}; supported: "
+                + ", ".join(sorted(METRIC_MEASURES)))
+            continue
+        expected = METRIC_ANALYSIS[measure]
+        analysis = metric.get("analysis", expected)
+        if analysis != expected:
+            errors.append(
+                f"{where}: {measure} uses the {expected!r} analysis, not {analysis!r}")
+        if expected not in analysis_by_type:
+            errors.append(f"{where}: add a {expected!r} entry to 'analyses'")
+
+        output = metric.get("output")
+        if not isinstance(output, str) or not output.strip():
+            errors.append(f"{where}: 'output' is required")
+
+        if measure in ("gain_db", "bandwidth_hz", "bandwidth_low_hz",
+                       "bandwidth_width_hz"):
+            source = metric.get("input")
+            if not isinstance(source, str) or not source.strip():
+                errors.append(f"{where}: 'input' is required for {measure}")
+            if "frequency" in metric:
+                frequency = metric["frequency"]
+                if (not isinstance(frequency, (int, float))
+                        or isinstance(frequency, bool) or frequency <= 0):
+                    errors.append(f"{where}: frequency must be a positive number")
+            elif measure == "gain_db":
+                warnings.append(f"{where}: no frequency; gain defaults to 1 kHz")
+
+        if measure == "thd_percent":
+            fundamental = metric.get("fundamental")
+            if (not isinstance(fundamental, (int, float))
+                    or isinstance(fundamental, bool) or fundamental <= 0):
+                errors.append(
+                    f"{where}: 'fundamental' must be a positive number for THD")
+            if "tran" not in analysis_by_type:
+                errors.append(f"{where}: THD also needs a 'tran' entry in 'analyses'")
+            fourier = analysis_by_type.get("fourier")
+            if fourier is not None:
+                if (fourier.get("output") and output
+                        and _metric_variable(fourier["output"])
+                        != _metric_variable(output)):
+                    warnings.append(
+                        f"{where}: fourier output {fourier['output']!r} differs "
+                        f"from metric output {output!r}")
+                if (fundamental and fourier.get("fundamental")
+                        and abs(float(fourier["fundamental"])
+                                - float(fundamental)) > 1e-9):
+                    warnings.append(
+                        f"{where}: fourier fundamental {fourier['fundamental']} "
+                        f"differs from metric fundamental {fundamental}")
+
+        if measure == "output_vrms":
+            if "tran" not in analysis_by_type:
+                errors.append(
+                    f"{where}: output_vrms needs a 'tran' entry in 'analyses'")
+            start, stop = metric.get("start"), metric.get("stop")
+            if (start is None) != (stop is None):
+                warnings.append(f"{where}: specify both start and stop, or neither")
+            if start is not None and stop is not None:
+                if not all(
+                        isinstance(value, (int, float))
+                        and not isinstance(value, bool)
+                        for value in (start, stop)):
+                    errors.append(f"{where}: start and stop must be numbers")
+                elif not (0 <= start < stop):
+                    errors.append(f"{where}: require 0 <= start < stop")
+
+        if measure in ("ein_uv", "noise_uv"):
+            noise = analysis_by_type.get("noise")
+            if noise is None:
+                errors.append(f"{where}: add a 'noise' entry to 'analyses'")
+            elif (output and noise.get("output")
+                  and _metric_variable(noise["output"])
+                  != _metric_variable(output)):
+                warnings.append(
+                    f"{where}: noise output {noise['output']!r} differs from "
+                    f"metric output {output!r}")
+
+        if "harmonics" in metric:
+            harmonics = metric["harmonics"]
+            if (not isinstance(harmonics, int) or isinstance(harmonics, bool)
+                    or harmonics < 2):
+                errors.append(f"{where}: harmonics must be an integer >= 2")
+
+        has_target = "target" in metric
+        has_limits = "max" in metric or "min" in metric
+        exploratory = metric.get("exploratory") is True
+        if not has_target and not has_limits and not exploratory:
+            errors.append(
+                f"{where}: needs target+tolerance, min, max, or exploratory=true")
+        if has_target:
+            target = metric["target"]
+            if not isinstance(target, (int, float)) or isinstance(target, bool):
+                errors.append(f"{where}: target must be a number")
+            if "tolerance" not in metric:
+                errors.append(f"{where}: target needs a tolerance")
+            else:
+                tolerance = metric["tolerance"]
+                if (not isinstance(tolerance, (int, float))
+                        or isinstance(tolerance, bool) or tolerance < 0):
+                    errors.append(
+                        f"{where}: tolerance must be a non-negative number")
+        if has_target and has_limits:
+            warnings.append(
+                f"{where}: both target and a limit are present; target wins")
+        if exploratory and (has_target or has_limits):
+            warnings.append(
+                f"{where}: exploratory=true ignores the target or limit")
+        for key in ("min", "max"):
+            if key in metric:
+                value = metric[key]
+                if not isinstance(value, (int, float)) or isinstance(value, bool):
+                    errors.append(f"{where}: {key} must be a number")
+
+        requirement = metric.get("requirement")
+        if requirement is not None:
+            if not isinstance(requirement, str) or not requirement.strip():
+                errors.append(
+                    f"{where}: requirement must be a non-empty string")
+            elif requirement not in requirement_ids:
+                errors.append(
+                    f"{where}: requirement {requirement!r} is absent from "
+                    f"design.requirements")
+
+        identifier = metric.get("id")
+        if identifier is not None:
+            if not isinstance(identifier, str) or not identifier.strip():
+                errors.append(f"{where}: id must be a non-empty string")
+            elif identifier in seen_ids:
+                errors.append(f"{where}: duplicate metric id {identifier!r}")
+            else:
+                seen_ids.add(identifier)
+    return errors, warnings
+
+
 def validate_spec(spec: dict[str, Any], base_dir: str | Path | None = None) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -1006,7 +1208,7 @@ def validate_spec(spec: dict[str, Any], base_dir: str | Path | None = None) -> d
 
     for analysis in norm["analyses"]:
         atype = analysis.get("type")
-        if atype not in ("op", "ac", "tran", "dc", "noise", "tf"):
+        if atype not in ("op", "ac", "tran", "dc", "noise", "tf", "fourier"):
             errors.append(f"unknown analysis type {atype!r}")
         if atype == "ac":
             if not analysis.get("start") or not analysis.get("stop"):
@@ -1018,6 +1220,10 @@ def validate_spec(spec: dict[str, Any], base_dir: str | Path | None = None) -> d
                 errors.append("tran analysis needs step and stop")
             elif analysis["step"] <= 0 or analysis["stop"] <= 0:
                 errors.append("tran step and stop must be positive")
+        if atype == "fourier":
+            fundamental = analysis.get("fundamental")
+            if not isinstance(fundamental, (int, float)) or fundamental <= 0:
+                errors.append("fourier analysis needs a positive fundamental")
 
     if not any(c["type"] in ("V", "I") and (c.get("ac") or c.get("waveform"))
                for c in comps):
@@ -1076,6 +1282,11 @@ def validate_spec(spec: dict[str, Any], base_dir: str | Path | None = None) -> d
     design_errors, design_warnings = validate_design_record(norm.get("design"))
     errors.extend(design_errors)
     warnings.extend(design_warnings)
+
+    metric_errors, metric_warnings = validate_metrics(
+        norm.get("metrics"), norm["analyses"], norm.get("design"))
+    errors.extend(metric_errors)
+    warnings.extend(metric_warnings)
 
     pcb_errors, pcb_warnings = validate_pcb(norm, comps, nets)
     errors.extend(pcb_errors)
