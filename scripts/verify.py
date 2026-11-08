@@ -67,6 +67,7 @@ REQUIRED_CHECK = {
     "erc": "kicad_erc",
     "kicad-parse": "kicad_schematic",
     "models": "models",
+    "design": "design",
 }
 
 
@@ -149,7 +150,18 @@ def check_spice(spec: dict[str, Any], path: Path,
                 base_dir: str | Path | None = None) -> Check:
     text = path.read_text(encoding="utf-8")
     lines = [ln.strip() for ln in text.splitlines()]
-    body = [ln for ln in lines if ln and not ln.startswith(("*", ".", "+"))]
+    body: list[str] = []
+    in_subckt = 0
+    for line in lines:
+        low = line.lower()
+        if low.startswith(".subckt"):
+            in_subckt += 1
+            continue
+        if low.startswith(".ends"):
+            in_subckt = max(0, in_subckt - 1)
+            continue
+        if in_subckt == 0 and line and not line.startswith(("*", ".", "+")):
+            body.append(line)
     devices: dict[str, list[str]] = {}
     for line in body:
         parts = line.split()
@@ -167,6 +179,12 @@ def check_spice(spec: dict[str, Any], path: Path,
             if element not in devices:
                 problems.append(f"{ref} ({element}) is missing from the netlist")
                 continue
+            definition = re.compile(rf"^\s*\.subckt\s+{re.escape(info['name'])}\b",
+                                    re.IGNORECASE)
+            if not any(definition.match(line) for line in lines):
+                problems.append(
+                    f"{ref}: model {info['name']!r} has no .subckt definition in the netlist"
+                )
             expected = [gen.spice_net(comp["pins"][canonical_pin(comp["type"], pin)], ground)
                         for pin in order]
             actual = devices[element]
@@ -896,6 +914,69 @@ def check_models(spec: dict[str, Any],
     return Check("models", None, detail, evidence)
 
 
+def check_design(spec: dict[str, Any]) -> Check:
+    """Report whether the planning and evidence record is complete."""
+    design = spec.get("design")
+    if not design:
+        return Check(
+            "design", None,
+            "no design record; add requirements, architecture, decisions, "
+            "risks and sources (see references/design-process.md)",
+        )
+    if not isinstance(design, dict):
+        return Check("design", False, "'design' must be an object")
+
+    requirements = design.get("requirements") or []
+    decisions = design.get("decisions") or []
+    risks = design.get("risks") or []
+    sources = design.get("sources") or []
+    architecture = design.get("architecture") or {}
+    evidence = {
+        "requirements": len(requirements),
+        "decisions": len(decisions),
+        "risks": len(risks),
+        "sources": len(sources),
+    }
+
+    missing = []
+    if not requirements:
+        missing.append("requirements")
+    if not decisions:
+        missing.append("decisions")
+    if not risks:
+        missing.append("risks")
+    if not sources:
+        missing.append("sources")
+    if not (architecture.get("summary") or architecture.get("blocks")):
+        missing.append("architecture summary or blocks")
+    if missing:
+        return Check("design", None,
+                     "design record incomplete: missing " + ", ".join(missing),
+                     evidence)
+
+    unsourced = [str(d.get("id") or "?") for d in decisions
+                 if not (d.get("sources") or d.get("rationale"))]
+    if unsourced:
+        return Check("design", None,
+                     "decisions without a source or rationale: " + ", ".join(unsourced),
+                     evidence)
+
+    high = [str(r.get("id") or "?") for r in risks
+            if r.get("severity") == "high"
+            and not (r.get("mitigation") and r.get("verification"))]
+    if high:
+        return Check("design", None,
+                     "high risks need mitigation and verification: " + ", ".join(high),
+                     evidence)
+
+    return Check(
+        "design", True,
+        f"{len(requirements)} requirements, {len(decisions)} decisions, "
+        f"{len(risks)} risks, {len(sources)} sources",
+        evidence,
+    )
+
+
 def check_kicad_erc(sch: Path, out: Path) -> Check:
     """Run KiCad's own ERC, but only when kicad-cli is actually usable here."""
     capability = env_probe.probe_kicad_cli()
@@ -1038,6 +1119,7 @@ def verify(spec_path: str | Path, outdir: str | Path,
               f"{len(validation['warnings'])} warning(s)",
               {"stats": validation.get("stats", {})}),
         check_models(spec, base_dir),
+        check_design(spec),
     ]
 
     paths = {
@@ -1151,7 +1233,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--erc", action="store_true",
                         help="also run KiCad ERC when kicad-cli is compatible")
     parser.add_argument("--require", metavar="STAGES",
-                        help="comma-separated stages that must PASS: simulate, erc, kicad-parse, models")
+                        help="comma-separated stages that must PASS: design, models, simulate, erc, kicad-parse")
     ns = parser.parse_args(argv)
     required = [s.strip() for s in (ns.require or "").split(",") if s.strip()]
     unknown = [s for s in required if s not in REQUIRED_CHECK]

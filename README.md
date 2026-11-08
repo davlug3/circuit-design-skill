@@ -1,8 +1,9 @@
 # circuit-design-skill
 
-Design analog, digital, mixed-signal and power circuits from a structured
-intake, with every calculation in Python. Generate a SPICE netlist, an LTspice
-schematic, a KiCad 9 schematic and netlist, a BOM and a verification report.
+Design analog, digital, mixed-signal and power circuits from requirements to
+verified files, with every calculation in Python. Plan the architecture, choose
+parts with evidence, generate a SPICE netlist, an LTspice schematic, a KiCad 9
+schematic and netlist, a BOM and a verification report.
 
 The generated SPICE netlist is the electrical source of truth. The LTspice and
 KiCad drawings are generated from the same component list, so the picture and
@@ -22,6 +23,36 @@ Most circuit mistakes are not exotic. They are:
 This skill makes those mistakes visible: it asks for the requirements, does the
 arithmetic in Python, emits files from one component list, and re-reads the
 files to check them.
+
+It also assumes the model's electronics and physics knowledge is a starting
+point, not a reference. Critical numbers must come from a datasheet, an
+application note, a standard, or a measurement.
+
+## Planning, research and part selection
+
+Before a schematic, the skill expects a short, reviewable record:
+
+- **Requirements** with conditions and acceptance limits.
+- **Architecture**: blocks, interfaces, power tree, grounding, protection, test
+  points, and at least one rejected alternative.
+- **Budgets**: power, thermal, tolerance, timing, noise, cost and area.
+- **Part decisions**: must-have constraints, candidates, a weighted comparison,
+  worst-case verification, lifecycle and second source.
+- **Risks**: severity, mitigation and the test that closes them.
+
+The guides are `references/design-process.md`,
+`references/part-selection.md` and `references/electronics-research.md`; the
+fill-in forms are in `templates/`.
+
+Put the result in the spec as `design` and gate on it:
+
+```bash
+python3 scripts/verify.py specs/rc.json --out out/ --require design
+```
+
+A `design` record is optional for a quick experiment, but `--require design`
+turns a missing or unsourced record into a failure. The report renders the
+requirements, decisions, risks and sources it contains.
 
 ## Requirements
 
@@ -98,6 +129,29 @@ Gate on it in CI:
 python3 scripts/verify.py specs/rc.json --out out/ --require models,simulate
 ```
 
+### Find a model
+
+`catalog/models.json` lists parts whose models are published in a stable,
+fetchable place. `scripts/model_fetch.py` downloads the file, checks that it
+actually defines the requested `.model` or `.subckt`, records the SHA-256 and
+provenance, and writes an entry the spec accepts:
+
+```bash
+python3 scripts/model_fetch.py --list
+python3 scripts/model_fetch.py --part 2N3904 --out models/
+python3 scripts/model_fetch.py --part 2N7002 --write-spec specs/switch.json --ref M1
+python3 scripts/model_fetch.py --url https://example.com/part.lib \
+  --part XYZ --vendor Acme
+python3 scripts/model_fetch.py --file downloaded.lib --part XYZ \
+  --vendor Acme --source https://example.com/part.lib
+```
+
+A `.subckt` model is refused unless its node order is known (`--subckt-pins`
+or the catalog entry), because guessing the pin order is worse than refusing
+the model. The fetcher does not certify the model against your physical part,
+and it does not grant a redistribution licence: read the header, keep the
+source URL and hash, and do not commit restricted vendor files.
+
 See `references/models.md` for the forms, hashing and licence notes.
 
 ## Quick start
@@ -161,6 +215,7 @@ not hide assumptions in the netlist.
 
 | Level | Proves | Does not prove |
 |---|---|---|
+| Design record | Requirements, decisions, risks and sources are written down | The decision is correct, or that the sources are current |
 | Spec | Pins, nets and references are consistent | Electrical behaviour |
 | Netlist agreement | SPICE, LTspice and KiCad describe the same nodes | Accuracy |
 | PCB handoff | Overlay, pin map and aliases agree; sibling validator accepts | Layout, DRC, DFM, real pads |
@@ -229,9 +284,10 @@ python3 -m unittest discover -s tests -v
 ```
 
 The tests cover value parsing, the calculators, the MNA solver, generation,
-verification and the PCB handoff. The KiCad parse test is skipped when
-`kiutils` is not installed; the sibling-PCB integration test is skipped when
-`pcb-design-skill` is not installed.
+verification, model fetch/ingestion, the design record and the PCB handoff.
+The KiCad parse test is skipped when `kiutils` is not installed; the
+sibling-PCB integration test is skipped when `pcb-design-skill` is not
+installed.
 
 ## License
 

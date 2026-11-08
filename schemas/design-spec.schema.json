@@ -212,6 +212,78 @@
         ]
       }
     },
+    "design": {
+      "type": "object",
+      "description": "Planning and evidence record: requirements, architecture, decisions, risks and sources. verify.py --require design enforces a complete record.",
+      "properties": {
+        "requirements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "text"],
+            "properties": {
+              "id": {"type": "string"},
+              "text": {"type": "string"},
+              "source": {"type": "string"},
+              "acceptance": {"type": "string"}
+            }
+          }
+        },
+        "architecture": {
+          "type": "object",
+          "properties": {
+            "summary": {"type": "string"},
+            "blocks": {"type": "array", "items": {"type": "string"}},
+            "interfaces": {"type": "array", "items": {"type": "string"}},
+            "budgets": {"type": "object"},
+            "test_points": {"type": "array", "items": {"type": "string"}}
+          }
+        },
+        "decisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "decision"],
+            "properties": {
+              "id": {"type": "string"},
+              "decision": {"type": "string"},
+              "alternatives": {"type": "array", "items": {"type": "string"}},
+              "rationale": {"type": "string"},
+              "sources": {"type": "array", "items": {"type": "string"}}
+            }
+          }
+        },
+        "risks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "risk"],
+            "properties": {
+              "id": {"type": "string"},
+              "risk": {"type": "string"},
+              "severity": {"enum": ["low", "medium", "high"]},
+              "mitigation": {"type": "string"},
+              "verification": {"type": "string"}
+            }
+          }
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["title"],
+            "properties": {
+              "title": {"type": "string"},
+              "url": {"type": "string"},
+              "document": {"type": "string"},
+              "revision": {"type": "string"},
+              "accessed": {"type": "string"},
+              "note": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
     "analyses": {
       "type": "array",
       "items": {

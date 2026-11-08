@@ -9,6 +9,7 @@ written down.
 | Level | What it proves | What it does not prove |
 |---|---|---|
 | Spec validation | Structure, pins, nets, references are consistent | Electrical behaviour |
+| Design record | Requirements, architecture, decisions, risks and sources are written | That the decision is correct or the sources are current |
 | Netlist agreement | SPICE / LTspice / KiCad describe the same nodes | Simulation accuracy |
 | PCB handoff | Overlay, pin map and aliases agree with the netlist | Layout, DRC, DFM, real pads |
 | MNA (linear) | Exact DC/AC solution of the linear model | Nonlinear devices, parasitics, layout |
@@ -66,13 +67,21 @@ python3 scripts/verify.py specs/rc.json --out out/ --json
     --exit-code-violations`. Exit code 5 means error-level violations and is a
     failure; any other non-zero code is a tool error, not a clean pass. The
     report is written next to the output as `<name>-erc.rpt`.
-11. **Required stages** — `--require simulate,erc,kicad-parse,models` converts
-    a `SKIP` in a required stage into a failure. This is what CI uses so a
-    missing tool or a generic transistor cannot masquerade as a pass.
+11. **Required stages** — `--require simulate,erc,kicad-parse,models,design`
+    converts a `SKIP` in a required stage into a failure. This is what CI uses
+    so a missing tool, a generic transistor, or an unrecorded decision cannot
+    masquerade as a pass.
 12. **Models** — resolves every semiconductor to its declared card. Generic
     placeholders and declarations without vendor/part/source are reported as
     `SKIP` (not pass); a missing model file, a hash mismatch or a missing
     `subckt_pins` order is a validation failure.
+13. **Design record** — checks that `design` contains requirements, an
+    architecture summary or blocks, decisions, risks and sources. A decision
+    with neither a source nor a rationale, or a high risk without a mitigation
+    and a verification, is a `SKIP`; `--require design` turns that into a
+    failure. This proves the record exists and is complete enough to review; it
+    does not prove the requirements are right or the sources are current.
+    The report renders the record.
 
 ## Local capability and CI
 
@@ -150,6 +159,12 @@ regenerated with the evidence.
    parasitics, layout and part variation are outside the model.
 6. **Do not quote a number without its condition.** "1.59 kHz" is meaningless
    without the resistor and capacitor values and the model.
+7. **A design record is not a proof.** It proves the requirements, decisions
+   and risks were written down and sourced, not that they are correct. Review
+   the sources and the operating point.
+8. **No source, no claim.** A datasheet value without a revision, a formula
+   without a units check, or a part choice without a comparison is a
+   hypothesis. See `references/electronics-research.md`.
 
 ## Adding a check
 
@@ -178,6 +193,7 @@ Guidelines:
 Even with a full pass:
 
 - Read the datasheet for every semiconductor, connector and power part.
+- Check the current revision and the errata, not a remembered version.
 - Check the absolute maximum ratings at the worst-case temperature.
 - Check the pinout against the package drawing.
 - Check the footprint pad numbering against the logical pin numbering.

@@ -5,15 +5,21 @@ on:
     paths:
       - "scripts/**"
       - "schemas/**"
+      - "catalog/**"
       - "examples/**"
       - "tests/**"
+      - "references/**"
+      - "templates/**"
       - ".github/workflows/design.yml"
   pull_request:
     paths:
       - "scripts/**"
       - "schemas/**"
+      - "catalog/**"
       - "examples/**"
       - "tests/**"
+      - "references/**"
+      - "templates/**"
       - ".github/workflows/design.yml"
   workflow_dispatch:
     inputs:
@@ -23,7 +29,7 @@ on:
         default: "examples/rc-lowpass.json"
         type: string
       require:
-        description: "Comma-separated stages that must PASS (simulate,erc,kicad-parse,models)"
+        description: "Comma-separated stages that must PASS (design,simulate,erc,kicad-parse,models)"
         required: false
         default: "simulate,erc"
         type: string
@@ -37,7 +43,7 @@ concurrency:
 
 env:
   SPEC: ${{ github.event.inputs.spec || 'examples/rc-lowpass.json' }}
-  REQUIRE: ${{ github.event.inputs.require || 'simulate' }}
+  REQUIRE: ${{ github.event.inputs.require || 'simulate,design' }}
 
 jobs:
   tests:

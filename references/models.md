@@ -33,6 +33,61 @@ revision is detected.
 sha256sum models/2N3904.lib
 ```
 
+## Finding a model
+
+`catalog/models.json` is a small, curated list of parts whose models are
+published at a stable URL. It records the SPICE model name (which often differs
+from the orderable part), the vendor, the source URL, the licence note, and the
+node order for a `.subckt`.
+
+```bash
+# What is available?
+python3 scripts/model_fetch.py --list
+
+# Fetch, validate, hash and write models/<part>.lib
+python3 scripts/model_fetch.py --part 2N3904 --out models/
+
+# Fetch and install directly into a spec (sets Q1.model = 2N3904)
+python3 scripts/model_fetch.py --part 2N3904 \
+  --write-spec specs/ce.json --ref Q1
+
+# Direct URL or a manually downloaded file
+python3 scripts/model_fetch.py --url https://example.com/part.lib \
+  --part XYZ --vendor Acme --name XYZ
+python3 scripts/model_fetch.py --file ~/Downloads/part.lib \
+  --part XYZ --vendor Acme --source https://example.com/part.lib
+```
+
+The fetcher:
+
+- downloads the file (5 MB limit) and decodes it as text;
+- extracts the requested `.model` or `.subckt` with the same parser the
+  generator uses, and refuses a file that does not define it;
+- refuses a `.subckt` unless the node order is known (`--subckt-pins` or the
+  catalog entry);
+- checks the expected device type when it is given (for example `NPN`, `D`,
+  `NMOS`);
+- writes `models/<part>.lib` (or the `--out` directory), computes the SHA-256
+  of the bytes actually written, and emits a `models` entry;
+- with `--write-spec`, assigns the model to `--ref` (or the only unassigned
+  semiconductor), validates the updated spec, and writes it only if valid.
+
+The hash is computed over the file bytes, so the spec's `sha256` and the
+resolver's check agree. Re-running against an existing file with different
+content fails unless `--force` is used; that is deliberate, because a changed
+model changes the simulation.
+
+If a vendor site presents an expired or otherwise invalid TLS certificate, the
+fetcher reports the certificate error and stops. Do not disable verification
+globally: download the file with a browser or another trusted client, verify
+its origin, and use `--file` with `--source`.
+
+The catalog is a convenience, not an endorsement. A model can be syntactically
+valid and still be wrong for your part, grade, package or temperature. Read the
+header, check the source's terms, and keep third-party model files out of a
+public repository unless their licence allows redistribution. Onsemi MODPEX and
+some Zetex models, for example, restrict commercial use and redistribution.
+
 ## Spec forms
 
 ### 1. Inline card with provenance
@@ -96,6 +151,11 @@ Generated netlist for the example above:
 XM1 DRAIN GATE 0 BSS138
 ```
 
+**Package pins are not SPICE nodes.** The catalog's 1N4148 model uses SPICE
+node 1 = anode and node 2 = cathode, while the SOD-27 package is pin 1 =
+cathode and pin 2 = anode. Record a datasheet pin map for the PCB handoff and
+never copy `subckt_pins` into a footprint pad map.
+
 ## What the generator does
 
 - Inlines the resolved card into `<name>.cir`, so the netlist stays
@@ -107,7 +167,15 @@ XM1 DRAIN GATE 0 BSS138
 - Adds a **Device models** table to the Markdown report with ref, type, kind,
   vendor, part and hash prefix.
 
-## LTspice schematic export\n\nA subcircuit device is written as an `X` instance (`SYMATTR Prefix X`) with the\nmodel name as `Value`. LTspice orders subcircuit nodes by the symbol's pins,\nnot by the order they appear in the `.asc`, so `subckt_pins` must match the\nsymbol's natural order (`D G S` for the MOSFET symbol, `C B E` for the BJT,\n`A K` for the diode, and so on). The generator refuses the export otherwise\nrather than producing a silently mis-wired schematic. A 4-terminal subcircuit\ncannot be represented by the built-in 3-pin symbols.\n\n## What this still does not prove
+## LTspice schematic export
+
+A subcircuit device is written as an `X` instance (`SYMATTR Prefix X`) with the
+model name as `Value`. LTspice orders subcircuit nodes by the symbol's pins,
+not by the order they appear in the `.asc`, so `subckt_pins` must match the
+symbol's natural order (`D G S` for the MOSFET symbol, `C B E` for the BJT,
+`A K` for the diode, and so on). The generator refuses the export otherwise
+rather than producing a silently mis-wired schematic. A 4-terminal subcircuit
+cannot be represented by the built-in 3-pin symbols.\n\n## What this still does not prove
 
 - The vendor model matches the physical part on your reel (process corner,
   package parasitics, thermal behaviour).

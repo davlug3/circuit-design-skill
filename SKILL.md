@@ -1,6 +1,6 @@
 ---
 name: circuit-design-skill
-description: Design analog, digital, mixed-signal and power circuits from a structured intake, with every calculation in Python. Use when asked to design or size a circuit, choose component values, check op-amp/filter/converter/transistor behaviour, produce an LTspice .asc/.cir, a SPICE netlist, or KiCad .kicad_sch/.net files, or verify that a schematic and netlist agree. Includes design-intake questions, closed-form calculators, a pure-Python MNA solver, and evidence-based verification.
+description: Design analog, digital, mixed-signal and power circuits from requirements to verified files. Use when planning a design, comparing architectures, choosing parts, sizing components, checking op-amp/filter/converter/transistor behaviour, finding and ingesting real SPICE models, producing an LTspice .asc/.cir, a SPICE netlist, or KiCad .kicad_sch/.net files, or verifying that a schematic and netlist agree. Includes intake questions, a planning and evidence workflow, part-selection decision records, open-web research guidance, closed-form calculators, a pure-Python MNA solver, model provenance, and evidence-based verification.
 license: MIT
 ---
 
@@ -14,33 +14,84 @@ was not verified.
 and KiCad drawings are generated from the same component list, so they cannot
 silently disagree with it.
 
+Treat the model's internal knowledge of electronics and physics as a source of
+hypotheses, not as evidence. Before a number reaches the schematic, trace it to
+a datasheet, an application note, a standard, or a measurement.
+
 ## Non-negotiables
 
-1. **Ask before guessing.** Use the intake questions in
+1. **Plan before you draw.** Write the requirements (with acceptance limits),
+   the architecture, the budgets, the risks, and the part decisions before
+   generating a schematic. Use `references/design-process.md` and the templates
+   in `templates/`.
+2. **Ask before guessing.** Use the intake questions in
    `references/intake.md`. If the user cannot answer, propose a default and
    record it in `assumptions`.
-2. **Every calculation is Python.** Do not do arithmetic in prose that the
+3. **Every calculation is Python.** Do not do arithmetic in prose that the
    scripts could do. Use `scripts/circuit_calc.py` or the MNA solver.
-3. **Physics first.** Check headroom, polarity, power, thermal, tolerance and
+4. **Physics first.** Check headroom, polarity, power, thermal, tolerance and
    absolute maximum ratings. A netlist that runs is not a safe circuit.
-4. **State the model.** A generic diode/BJT/MOSFET is a placeholder. Say
+5. **Cite the evidence.** Every critical parameter, formula, derating rule and
+   part choice needs a source a reviewer can open: datasheet revision, app
+   note, standard clause, or measurement. See
+   `references/electronics-research.md`. "The model remembers it" is not a
+   source.
+6. **Record the decision.** A part or architecture choice is not complete until
+   the alternatives, the operating point, the rationale and the residual risk
+   are written down. See `templates/decision-record.md` and
+   `references/part-selection.md`.
+7. **State the model.** A generic diode/BJT/MOSFET is a placeholder. Say
    "unverified (generic models)" until a real model with vendor, part and
-   source is recorded in `models`. See `references/models.md`; a `.subckt`
-   model also needs an explicit `subckt_pins` node order.
-5. **Verify, then claim.** Run `scripts/verify.py`. A check that did not run is
+   source is recorded in `models`. Prefer a fetched, hashed model over a typed
+   one. See `references/models.md`; a `.subckt` model also needs an explicit
+   `subckt_pins` node order.
+8. **Verify, then claim.** Run `scripts/verify.py`. A check that did not run is
    `SKIP`, not `PASS`. Never say "this should work".
-6. **Do not claim ERC/DRC/fab compliance.** This skill produces schematics and
+9. **Do not claim ERC/DRC/fab compliance.** This skill produces schematics and
    netlists, not a manufactured board. Hand off to `pcb-design-skill` for
    layout, DRC and fabrication; see `references/pcb-handoff.md`.
-7. **Pin numbers are logical, not physical.** See the warning in
-   `references/kicad-format.md` before connecting a footprint.
-8. **Probe capability, not presence.** A binary on `PATH` may still be
-   unusable (wrong architecture, missing shared library, too old). Run
-   `scripts/env_probe.py` before trusting a stage. If the local machine cannot
-   run it, verify on CI and record the backend; never report a local `SKIP` as
-   a local `PASS` because CI passed.
+10. **Pin numbers are logical, not physical.** See the warning in
+    `references/kicad-format.md` before connecting a footprint.
+11. **Probe capability, not presence.** A binary on `PATH` may still be
+    unusable (wrong architecture, missing shared library, too old). Run
+    `scripts/env_probe.py` before trusting a stage. If the local machine cannot
+    run it, verify on CI and record the backend; never report a local `SKIP` as
+    a local `PASS` because CI passed.
 
 ## Workflow
+
+### 0. Plan, research, choose
+
+Do this before intake or scaffolding. It is the cheapest place to fix a design.
+
+1. **Frame** the problem: function, environment, supplies, load, mechanical
+   limits, lifecycle, compliance, and acceptance measurements.
+2. **Research** the candidate technologies and parts. Start from datasheets and
+   vendor application notes; use standards for compliance claims. Log the
+   revision and access date. See `references/electronics-research.md`.
+3. **Architect**: block diagram, interface contracts, power tree, grounding,
+   protection, test points. Compare at least one alternative and record why it
+   was rejected. See `references/design-process.md`.
+4. **Budget**: power, thermal, tolerance, timing, noise, cost, area. Put the
+   numbers in Python, not in prose.
+5. **Select parts**: gate on must-haves, score the survivors, verify the winner
+   at the worst-case operating point, and write a decision record. See
+   `references/part-selection.md`.
+6. **Record** the result in the spec's `design` object:
+
+   ```json
+   "design": {
+     "requirements": [{"id": "R1", "text": "5 V +/-2% at 0-1 A", "acceptance": "measure at 0 A and 1 A", "source": "brief rev A"}],
+     "architecture": {"summary": "buck converter", "blocks": ["input", "buck", "output"], "budgets": {"efficiency": "> 85%"}},
+     "decisions": [{"id": "D1", "decision": "buck instead of linear", "alternatives": ["LDO"], "rationale": "1.5 W would overheat an LDO", "sources": ["TPS datasheet, thermal section"]}],
+     "risks": [{"id": "K1", "risk": "inductor saturation at startup", "severity": "high", "mitigation": "soft-start and 1.5x Isat margin", "verification": "startup transient at 40 C"}],
+     "sources": [{"title": "TPS datasheet", "document": "SBVS123", "revision": "C", "accessed": "2026-11-08"}]
+   }
+   ```
+
+   `python3 scripts/verify.py --require design` fails a spec with no complete
+   record. Start from `templates/design-plan.md`,
+   `templates/decision-record.md` and `templates/research-log.md`.
 
 ### 1. Intake
 
@@ -124,6 +175,21 @@ supply a vendor `.lib`/`.mod` file (or full card) in `models`, with `vendor`,
 `part` and `source`. A `.subckt` model also needs `subckt_pins`; the generator
 then emits an `X` device in that node order. See `references/models.md`.
 
+To find and ingest a published model, use the catalog and the fetcher:
+
+```bash
+python3 scripts/model_fetch.py --list
+python3 scripts/model_fetch.py --part 2N3904 --out models/
+python3 scripts/model_fetch.py --part 2N7002 --write-spec specs/switch.json --ref M1
+```
+
+The fetcher downloads the file, extracts the requested `.model` or `.subckt`,
+refuses a file that does not define it, records the SHA-256 and provenance, and
+writes a `models` entry the resolver accepts. It does not certify that the model
+matches your physical part, and it does not bypass a vendor's licence: read the
+file header, do not commit restricted vendor models, and prefer `--file` with
+`--source` when a site's TLS certificate is broken.
+
 Without `--formats`, the spec's `deliverables` list is used. Outputs:
 
 | File | Purpose |
@@ -191,6 +257,8 @@ The verifier re-reads the generated files and checks:
 - `ngspice` runs the netlist if it is installed and compatible;
 - every semiconductor resolves to a real, traceable model, or is reported as
   a generic placeholder (add `--require models` to make that a failure);
+- the `design` record has requirements, an architecture, sourced decisions,
+  risks and sources (add `--require design` to make a missing record a failure);
 - KiCad ERC runs with `--erc` when `kicad-cli` is installed and compatible.
 
 Read `references/verification.md` for what each check proves and what it does
@@ -261,20 +329,24 @@ SKILL.md
 README.md
 LICENSE
 schemas/design-spec.schema.json
+catalog/models.json          known fetchable model sources (part, model, vendor)
 scripts/circuit_common.py    value parsing, E-series, result envelope
 scripts/circuit_calc.py      26 calculators and CLI
 scripts/mna.py               pure-Python linear MNA solver
-scripts/design_spec.py       validate / normalize / scaffold
+scripts/design_spec.py       validate / normalize / scaffold / model resolution
 scripts/symbols.py           LTspice and KiCad symbol geometry
 scripts/generate.py          .cir, .asc, .net, .kicad_sch, BOM, report
+scripts/model_fetch.py       find, validate, hash and ingest a SPICE model
 scripts/pcb_handoff.py       overlay, pin map, node aliases, handoff document
-scripts/verify.py            structural, MNA, ERC and ngspice checks
+scripts/verify.py            structural, MNA, ERC, model and design checks
 scripts/env_probe.py         capability probe: ok / incompatible / missing
 scripts/ci_dispatch.py       GitHub Actions dispatch with safety checks
 .github/workflows/design.yml  unit tests, KiCad 9 + ngspice verification
-references/                  intake, topologies, analog, digital, power,
+references/                  planning and research, part selection, intake,
+                             topologies, analog, digital, power,
                              physics/reliability, LTspice, KiCad, PCB handoff,
                              models, verification
+templates/                   design plan, decision record, research log
 examples/                    ready-to-run specs, including rc-lowpass-pcb.json
 tests/                       unit and end-to-end tests
 ```
@@ -315,5 +387,14 @@ The format details were checked against vendor documentation, not memory:
 - TI, *Op Amps for Everyone* (SLOD006) and filter application notes.
 - NXP, *UM10204 I2C-bus specification*.
 - IPC-2221B, *Generic Standard on Printed Board Design*.
+- KiCad Spice Library and PySpice example libraries as model mirrors; each
+  fetched model keeps its own header and source URL. Check the source's terms
+  before redistributing a model.
+
+Design decisions are only as good as their evidence. For each project, add the
+actual datasheet revisions, application notes, standards and measurements to
+`design.sources`; do not rely on this list as a substitute. See
+`references/electronics-research.md` for the source hierarchy and citation
+format.
 
 See the `references/` files for the specific equations and caveats.

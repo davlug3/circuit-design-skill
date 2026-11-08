@@ -170,7 +170,7 @@ class ModelBook:
                 name = str(resolved.get("name") or requested)
                 comment = _model_comment(resolved)
                 body = str(resolved["card"])
-                if not body.lstrip().startswith((".model", ".subckt", "*")):
+                if not body.lstrip().lower().startswith((".model", ".subckt", "*")):
                     body = f"* {requested}: {body}"
                 card = (comment + "\n" if comment else "") + body
                 self._subckt[key] = bool(resolved.get("subckt"))
@@ -711,6 +711,7 @@ def build_report(spec: dict[str, Any], files: dict[str, str],
         "files": files,
         "verification": verification,
         "pcb": pcb,
+        "design": spec.get("design") or {},
         "simulation_status": model_status(spec, base_dir),
     }
 
@@ -733,6 +734,88 @@ def report_markdown(report: dict[str, Any]) -> str:
         for supply in report["supplies"]:
             lines.append(f"- `{supply.get('name')}` = {supply.get('voltage')} V")
         lines.append("")
+
+    design = report.get("design") or {}
+    if design:
+        lines += ["## Design record", ""]
+        architecture = design.get("architecture") or {}
+        if architecture.get("summary"):
+            lines += [str(architecture["summary"]), ""]
+        for key, label in (("blocks", "Blocks"), ("interfaces", "Interfaces"),
+                           ("test_points", "Test points")):
+            values = architecture.get(key) or []
+            if values:
+                lines.append(f"**{label}:** " + "; ".join(str(v) for v in values))
+                lines.append("")
+        budgets = architecture.get("budgets") or {}
+        if budgets:
+            lines += ["| Budget | Value |", "| --- | --- |"]
+            lines += [f"| {key} | {value} |" for key, value in budgets.items()]
+            lines.append("")
+
+        requirements = design.get("requirements") or []
+        if requirements:
+            lines += [
+                "### Requirements",
+                "",
+                "| ID | Requirement | Acceptance | Source |",
+                "| --- | --- | --- | --- |",
+            ]
+            for item in requirements:
+                lines.append(
+                    f"| {item.get('id', '')} | {item.get('text', '')} | "
+                    f"{item.get('acceptance', '')} | {item.get('source', '')} |"
+                )
+            lines.append("")
+
+        decisions = design.get("decisions") or []
+        if decisions:
+            lines += [
+                "### Decisions",
+                "",
+                "| ID | Decision | Alternatives | Rationale | Sources |",
+                "| --- | --- | --- | --- | --- |",
+            ]
+            for item in decisions:
+                alternatives = ", ".join(str(a) for a in item.get("alternatives") or [])
+                sources = ", ".join(str(s) for s in item.get("sources") or [])
+                lines.append(
+                    f"| {item.get('id', '')} | {item.get('decision', '')} | "
+                    f"{alternatives} | {item.get('rationale', '')} | {sources} |"
+                )
+            lines.append("")
+
+        risks = design.get("risks") or []
+        if risks:
+            lines += [
+                "### Risks",
+                "",
+                "| ID | Risk | Severity | Mitigation | Verification |",
+                "| --- | --- | --- | --- | --- |",
+            ]
+            for item in risks:
+                lines.append(
+                    f"| {item.get('id', '')} | {item.get('risk', '')} | "
+                    f"{item.get('severity', '')} | {item.get('mitigation', '')} | "
+                    f"{item.get('verification', '')} |"
+                )
+            lines.append("")
+
+        sources = design.get("sources") or []
+        if sources:
+            lines += [
+                "### Sources",
+                "",
+                "| Title | Document / URL | Revision | Accessed |",
+                "| --- | --- | --- | --- |",
+            ]
+            for item in sources:
+                where = item.get("document") or item.get("url") or ""
+                lines.append(
+                    f"| {item.get('title', '')} | {where} | "
+                    f"{item.get('revision', '')} | {item.get('accessed', '')} |"
+                )
+            lines.append("")
 
     lines += [
         "## Components",

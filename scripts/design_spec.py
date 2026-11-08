@@ -814,6 +814,99 @@ def validate_pcb(spec: dict[str, Any], comps: list[dict[str, Any]],
     return errors, warnings
 
 
+def validate_design_record(design: Any) -> tuple[list[str], list[str]]:
+    """Shape-check the planning record and flag unsourced claims.
+
+    The record is optional.  When present, malformed shapes are errors and
+    missing evidence is a warning; ``verify.py --require design`` turns the
+    missing-evidence cases into a failure.
+    """
+    errors: list[str] = []
+    warnings: list[str] = []
+    if design is None:
+        return errors, warnings
+    if not isinstance(design, dict):
+        return ["'design' must be an object"], warnings
+
+    sections: dict[str, list[Any]] = {}
+    for section in ("requirements", "decisions", "risks", "sources"):
+        value = design.get(section, [])
+        if not isinstance(value, list):
+            errors.append(f"design.{section} must be a list")
+            value = []
+        sections[section] = value
+    architecture = design.get("architecture")
+    if architecture is not None and not isinstance(architecture, dict):
+        errors.append("design.architecture must be an object")
+    elif isinstance(architecture, dict):
+        for key in ("blocks", "interfaces", "test_points"):
+            if key in architecture and not isinstance(architecture[key], list):
+                errors.append(f"design.architecture.{key} must be a list")
+        if "budgets" in architecture and not isinstance(architecture["budgets"], dict):
+            errors.append("design.architecture.budgets must be an object")
+
+    for index, item in enumerate(sections["requirements"]):
+        if not isinstance(item, dict):
+            errors.append(f"design.requirements[{index}] must be an object")
+            continue
+        if not item.get("id") or not item.get("text"):
+            errors.append(f"design.requirements[{index}] needs id and text")
+        if not item.get("source"):
+            warnings.append(
+                f"requirement {item.get('id', index)!r} has no source; "
+                "cite the brief, standard, or measurement"
+            )
+
+    for index, item in enumerate(sections["decisions"]):
+        if not isinstance(item, dict):
+            errors.append(f"design.decisions[{index}] must be an object")
+            continue
+        if not item.get("id") or not item.get("decision"):
+            errors.append(f"design.decisions[{index}] needs id and decision")
+        if not item.get("rationale"):
+            warnings.append(
+                f"decision {item.get('id', index)!r} has no rationale"
+            )
+        if not item.get("sources"):
+            warnings.append(
+                f"decision {item.get('id', index)!r} cites no source; "
+                "a datasheet, app note, or measurement is required for a "
+                "part or architecture choice"
+            )
+
+    for index, item in enumerate(sections["risks"]):
+        if not isinstance(item, dict):
+            errors.append(f"design.risks[{index}] must be an object")
+            continue
+        if not item.get("id") or not item.get("risk"):
+            errors.append(f"design.risks[{index}] needs id and risk")
+        severity = item.get("severity")
+        if severity is not None and severity not in ("low", "medium", "high"):
+            errors.append(
+                f"design.risks[{index}].severity must be low, medium or high"
+            )
+        if severity == "high" and not (item.get("mitigation") and item.get("verification")):
+            warnings.append(
+                f"high risk {item.get('id', index)!r} needs a mitigation and a verification"
+            )
+
+    for index, item in enumerate(sections["sources"]):
+        if not isinstance(item, dict):
+            errors.append(f"design.sources[{index}] must be an object")
+            continue
+        if not item.get("title"):
+            errors.append(f"design.sources[{index}] needs a title")
+        if not item.get("url") and not item.get("document"):
+            warnings.append(
+                f"source {item.get('title', index)!r} has neither url nor document"
+            )
+        if item.get("url") and not item.get("accessed"):
+            warnings.append(
+                f"source {item.get('title', index)!r} has a url but no accessed date"
+            )
+    return errors, warnings
+
+
 def validate_spec(spec: dict[str, Any], base_dir: str | Path | None = None) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -979,6 +1072,10 @@ def validate_spec(spec: dict[str, Any], base_dir: str | Path | None = None) -> d
                     f"{comp['ref']}: subckt_pins refers to missing pin(s) "
                     f"{', '.join(map(str, missing))}"
                 )
+
+    design_errors, design_warnings = validate_design_record(norm.get("design"))
+    errors.extend(design_errors)
+    warnings.extend(design_warnings)
 
     pcb_errors, pcb_warnings = validate_pcb(norm, comps, nets)
     errors.extend(pcb_errors)
