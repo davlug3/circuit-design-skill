@@ -277,6 +277,21 @@ For PCB layout, use `pcb-design-skill` with the generated overlay, pin map and
 node aliases. The PCB skill's DRC, DFM and unconnected gates, not this skill,
 decide whether the board is manufacturable.
 
+## Audio handoff
+
+Audio and sound-engineering requirements, perceptual limits and measurement
+conditions come from the sibling
+[`audio-engineering-skill`](https://github.com/davlug3/audio-engineering-skill).
+That skill emits a versioned `handoff.json`; this skill merges its requirements
+and target metrics into the design spec, then sizes, simulates and verifies the
+electrical implementation.
+
+This skill does not hold audio-specific knowledge or decide what sounds good.
+A simulation is not a measurement, and an audio target is not a verified
+result. The contract, merge mapping and current status are in
+`references/audio-handoff.md`. The generic `metrics` stage for gain, bandwidth,
+THD and noise is not implemented yet.
+
 ## Tests
 
 ```bash

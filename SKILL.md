@@ -57,6 +57,10 @@ a datasheet, an application note, a standard, or a measurement.
     `scripts/env_probe.py` before trusting a stage. If the local machine cannot
     run it, verify on CI and record the backend; never report a local `SKIP` as
     a local `PASS` because CI passed.
+12. **Audio targets come from the audio skill.** For audio and sound work,
+    requirements, perceptual limits and measurement conditions come from
+    `audio-engineering-skill`, not from this skill's memory. This skill owns
+    the implementation and verification. See `references/audio-handoff.md`.
 
 ## Workflow
 

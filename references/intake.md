@@ -43,6 +43,7 @@ If the user cannot answer a question, propose a default **and record it in
 | Input and output impedance? | Loading and divider errors | `parameters` |
 | Noise limit (input-referred or output)? | Op-amp and resistor noise | `parameters` |
 | Distortion limit (THD, THD+N)? | Loop gain and output stage | `parameters` |
+| Is this audio or sound equipment? | Take audio targets, conditions and measurement method from `audio-engineering-skill`; do not invent them here | `design.requirements` |
 | Settling time or transient response? | Loop bandwidth and SR | `parameters` |
 | Common-mode range? | Instrumentation topology | `parameters` |
 
