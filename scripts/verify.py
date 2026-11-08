@@ -50,7 +50,10 @@ from circuit_common import dumps, si_number, spice_number, spice_ref  # noqa: E4
 from design_spec import (  # noqa: E402
     BOARDABLE_TYPES,
     SIMULATION_ONLY_TYPES,
+    canonical_pin,
+    model_records,
     model_status,
+    resolve_model,
     validate_spec,
 )
 from mna import MNAError, UnsupportedElement, from_components  # noqa: E402
@@ -63,6 +66,7 @@ REQUIRED_CHECK = {
     "simulate": "ngspice",
     "erc": "kicad_erc",
     "kicad-parse": "kicad_schematic",
+    "models": "models",
 }
 
 
@@ -141,7 +145,8 @@ def sexp_children(node: list, key: str) -> list[Any]:
 # Structural checks
 # ---------------------------------------------------------------------------
 
-def check_spice(spec: dict[str, Any], path: Path) -> Check:
+def check_spice(spec: dict[str, Any], path: Path,
+                base_dir: str | Path | None = None) -> Check:
     text = path.read_text(encoding="utf-8")
     lines = [ln.strip() for ln in text.splitlines()]
     body = [ln for ln in lines if ln and not ln.startswith(("*", ".", "+"))]
@@ -155,6 +160,22 @@ def check_spice(spec: dict[str, Any], path: Path) -> Check:
     ground = spec["ground"]
     for comp in spec["components"]:
         ref = comp["ref"]
+        info = resolve_model(spec, comp.get("model"), base_dir)
+        if info and info.get("subckt"):
+            order = comp.get("subckt_pins") or info.get("subckt_pins") or []
+            element = "X" + ref
+            if element not in devices:
+                problems.append(f"{ref} ({element}) is missing from the netlist")
+                continue
+            expected = [gen.spice_net(comp["pins"][canonical_pin(comp["type"], pin)], ground)
+                        for pin in order]
+            actual = devices[element]
+            if actual[:len(expected)] != expected:
+                problems.append(f"{ref}: subckt nodes {actual[:len(expected)]} != {expected}")
+            elif actual[-1] != info["name"]:
+                problems.append(f"{ref}: subckt model {actual[-1]!r} != {info['name']!r}")
+            continue
+
         element = gen.spice_ref(ref, comp["type"])
         if element not in devices:
             problems.append(f"{ref} ({element}) is missing from the netlist")
@@ -197,12 +218,15 @@ def _parse_asc(text: str) -> tuple[dict[str, dict[str, Any]], dict[tuple[int, in
                 symbols[parts[2]] = current
             elif parts[1] == "Value":
                 current["value"] = " ".join(parts[2:])
+            elif parts[1] == "Prefix":
+                current["prefix"] = parts[2]
         elif parts[0] == "FLAG":
             flags[(int(parts[1]), int(parts[2]))] = parts[3]
     return symbols, flags
 
 
-def check_asc(spec: dict[str, Any], path: Path) -> Check:
+def check_asc(spec: dict[str, Any], path: Path,
+              base_dir: str | Path | None = None) -> Check:
     text = path.read_text(encoding="utf-8")
     if not text.startswith("Version "):
         return Check("ltspice_asc", False, "missing Version header")
@@ -215,6 +239,13 @@ def check_asc(spec: dict[str, Any], path: Path) -> Check:
             problems.append(f"{ref} is missing from the .asc")
             continue
         entry = symbols[ref]
+        info = resolve_model(spec, comp.get("model"), base_dir)
+        if info and info.get("subckt"):
+            if entry.get("prefix") != "X":
+                problems.append(f"{ref}: subcircuit instance needs Prefix X")
+            if entry.get("value") != info["name"]:
+                problems.append(
+                    f"{ref}: Value {entry.get('value')!r} != subckt {info['name']!r}")
         rot_text = entry["rot"]
         try:
             rot = int(rot_text.lstrip("R"))
@@ -839,6 +870,32 @@ def _run_ngspice(netlist: Path) -> Check:
                      "see the log for the raw result", {"log": text[-2000:]})
 
 
+def check_models(spec: dict[str, Any],
+                 base_dir: str | Path | None = None) -> Check:
+    """Report whether semiconductors are backed by real, traceable models."""
+    status = model_status(spec, base_dir)
+    records = model_records(spec, base_dir)
+    if not records:
+        return Check("models", None, status)
+    generic = [r["ref"] for r in records if r["generic"]]
+    detail = status
+    if generic:
+        detail += f"; generic placeholder for {', '.join(generic)}"
+    elif status.startswith("declared"):
+        detail += ("; models are declared inline but have no vendor/part/source; "
+                   "record provenance to call them vendor models")
+    evidence = {"status": status, "devices": [
+        {"ref": r["ref"], "model": r["model"],
+         "kind": (r["resolved"] or {}).get("kind", "generic")}
+        for r in records
+    ]}
+    if status.startswith("model errors"):
+        return Check("models", False, detail, evidence)
+    if status == "vendor models supplied":
+        return Check("models", True, detail, evidence)
+    return Check("models", None, detail, evidence)
+
+
 def check_kicad_erc(sch: Path, out: Path) -> Check:
     """Run KiCad's own ERC, but only when kicad-cli is actually usable here."""
     capability = env_probe.probe_kicad_cli()
@@ -955,7 +1012,8 @@ def verify(spec_path: str | Path, outdir: str | Path,
            erc: bool = False,
            required: list[str] | tuple[str, ...] | None = None) -> dict[str, Any]:
     raw = json.loads(Path(spec_path).read_text(encoding="utf-8"))
-    validation = validate_spec(raw)
+    base_dir = Path(spec_path).resolve().parent
+    validation = validate_spec(raw, base_dir=base_dir)
     if not validation["ok"]:
         return {
             "ok": False,
@@ -974,10 +1032,13 @@ def verify(spec_path: str | Path, outdir: str | Path,
         pcb_layers=pcb_layers, pcb_skill=pcb_skill,
     )
 
-    checks: list[Check] = [Check("spec", True,
-                                 f"valid spec with {len(spec['components'])} components, "
-                                 f"{len(validation['warnings'])} warning(s)",
-                                 {"stats": validation.get("stats", {})})]
+    checks: list[Check] = [
+        Check("spec", True,
+              f"valid spec with {len(spec['components'])} components, "
+              f"{len(validation['warnings'])} warning(s)",
+              {"stats": validation.get("stats", {})}),
+        check_models(spec, base_dir),
+    ]
 
     paths = {
         "spice": out / f"{name}.cir",
@@ -986,9 +1047,9 @@ def verify(spec_path: str | Path, outdir: str | Path,
         "kicad_sch": out / f"{name}.kicad_sch",
     }
     if paths["spice"].exists():
-        checks.append(check_spice(spec, paths["spice"]))
+        checks.append(check_spice(spec, paths["spice"], base_dir))
     if paths["ltspice_asc"].exists():
-        checks.append(check_asc(spec, paths["ltspice_asc"]))
+        checks.append(check_asc(spec, paths["ltspice_asc"], base_dir))
     if paths["kicad_net"].exists():
         checks.append(check_kicad_net(spec, paths["kicad_net"]))
     if paths["kicad_sch"].exists():
@@ -1036,7 +1097,7 @@ def verify(spec_path: str | Path, outdir: str | Path,
         "summary": summary,
         "checks": [c.as_dict() for c in checks],
         "warnings": validation["warnings"],
-        "simulation_status": model_status(spec),
+        "simulation_status": model_status(spec, base_dir),
         "provenance": provenance(required),
     }
     vpath = out / f"{name}-verification.json"
@@ -1090,7 +1151,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--erc", action="store_true",
                         help="also run KiCad ERC when kicad-cli is compatible")
     parser.add_argument("--require", metavar="STAGES",
-                        help="comma-separated stages that must PASS: simulate, erc, kicad-parse")
+                        help="comma-separated stages that must PASS: simulate, erc, kicad-parse, models")
     ns = parser.parse_args(argv)
     required = [s.strip() for s in (ns.require or "").split(",") if s.strip()]
     unknown = [s for s in required if s not in REQUIRED_CHECK]

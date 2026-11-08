@@ -68,6 +68,38 @@ because CI verifies the pushed revision, not the working copy. The verification
 JSON records `provenance.backend` (`local` or `ci`), the commit SHA and the run
 id.
 
+## Real device models
+
+Generic BJT/diode/MOSFET cards do not describe a part you can buy. Declare the
+real model in `models`, with provenance:
+
+```json
+"models": {
+  "2N3904": {
+    "file": "models/2N3904.lib",
+    "name": "2N3904",
+    "vendor": "onsemi",
+    "part": "2N3904",
+    "source": "https://www.onsemi.com/.../2N3904.lib",
+    "sha256": "4f0c…"
+  }
+}
+```
+
+Only the named `.model`/`.subckt` block is inlined into the netlist, with a
+provenance comment. A subcircuit model (common for MOSFETs) also needs
+`subckt_pins` — the generator will not guess the pin order. The report gains a
+**Device models** table and the status moves from
+`unverified (generic models)` to `vendor models supplied`.
+
+Gate on it in CI:
+
+```bash
+python3 scripts/verify.py specs/rc.json --out out/ --require models,simulate
+```
+
+See `references/models.md` for the forms, hashing and licence notes.
+
 ## Quick start
 
 ```bash

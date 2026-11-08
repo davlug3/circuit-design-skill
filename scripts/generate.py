@@ -46,7 +46,14 @@ from circuit_common import (  # noqa: E402
     spice_number,
     spice_ref,
 )
-from design_spec import GENERIC_MODELS, model_status, validate_spec  # noqa: E402
+from design_spec import (  # noqa: E402
+    GENERIC_MODELS,
+    canonical_pin,
+    model_records,
+    model_status,
+    resolve_model,
+    validate_spec,
+)
 from symbols import (  # noqa: E402
     ASC_SYMBOLS,
     KICAD_PINS,
@@ -132,11 +139,13 @@ def _generic_card(ctype: str, name: str, comp: dict[str, Any]) -> str:
 class ModelBook:
     """Collects model cards exactly once and resolves a model per component."""
 
-    def __init__(self, spec: dict[str, Any]):
+    def __init__(self, spec: dict[str, Any], base_dir: str | Path | None = None):
         self.spec = spec
+        self.base_dir = base_dir
         self.cards: list[str] = []
         self._emitted: dict[str, str] = {}
         self._by_ref: dict[str, str] = {}
+        self._subckt: dict[str, bool] = {}
 
     def _add(self, key: str, name: str, card: str) -> str:
         if key not in self._emitted:
@@ -144,33 +153,74 @@ class ModelBook:
             self.cards.append(card)
         return self._emitted[key]
 
-    def model_for(self, comp: dict[str, Any]) -> str | None:
-        ref = comp["ref"]
+    def info_for(self, comp: dict[str, Any]) -> dict[str, Any] | None:
+        """Resolve the model card and its provenance for one component."""
         ctype = comp["type"]
         if ctype not in GENERIC_MODELS and ctype not in ("SW", "OPAMP"):
             return None
         requested = comp.get("model")
         declared = self.spec.get("models") or {}
+        key = f"ref:{comp['ref']}"
+
         if requested and requested in declared:
+            resolved = resolve_model(self.spec, requested, self.base_dir)
+            if resolved is not None:
+                if resolved.get("error"):
+                    raise ValueError(f"{comp['ref']}: {resolved['error']}")
+                name = str(resolved.get("name") or requested)
+                comment = _model_comment(resolved)
+                body = str(resolved["card"])
+                if not body.lstrip().startswith((".model", ".subckt", "*")):
+                    body = f"* {requested}: {body}"
+                card = (comment + "\n" if comment else "") + body
+                self._subckt[key] = bool(resolved.get("subckt"))
+                return {"name": self._add(f"decl:{requested}", name, card),
+                        "subckt": self._subckt[key],
+                        "subckt_pins": resolved.get("subckt_pins"),
+                        "provenance": resolved}
+
+            # Legacy parameter object (no card/file): expand it to a .model.
             raw = declared[requested]
-            if isinstance(raw, str):
-                card = raw.strip()
-                if not card.startswith((".model", ".subckt", "*")):
-                    card = f"* {requested}: {card}"
-                name = requested
-            else:
+            if isinstance(raw, dict):
                 name = str(raw.get("name", requested))
                 card = _card_from_dict(name, str(raw.get("type", ctype)), dict(raw))
-            return self._add(f"decl:{requested}", name, card)
+                self._subckt[key] = False
+                return {"name": self._add(f"decl:{requested}", name, card),
+                        "subckt": False, "provenance": {"kind": "declared"}}
+
         if ctype == "OPAMP":
-            name = f"OPAMP_{ref}"
-            return self._add(f"ref:{ref}", name, _generic_card(ctype, name, comp))
+            name = f"OPAMP_{comp['ref']}"
+            self._subckt[key] = False
+            return {"name": self._add(key, name, _generic_card(ctype, name, comp)),
+                    "subckt": False, "provenance": None}
+
         base = requested or f"{ctype}GEN"
-        name = f"{base}_{ref}"
-        return self._add(f"ref:{ref}", name, _generic_card(ctype, name, comp))
+        name = f"{base}_{comp['ref']}"
+        self._subckt[key] = False
+        return {"name": self._add(key, name, _generic_card(ctype, name, comp)),
+                "subckt": False, "provenance": None}
+
+    def model_for(self, comp: dict[str, Any]) -> str | None:
+        info = self.info_for(comp)
+        return info["name"] if info else None
 
     def text(self, *, header: str) -> str:
         return header + "\n" + "\n\n".join(self.cards) + "\n"
+
+
+def _model_comment(info: dict[str, Any]) -> str:
+    bits = []
+    if info.get("vendor"):
+        bits.append(f"vendor={info['vendor']}")
+    if info.get("part"):
+        bits.append(f"part={info['part']}")
+    if info.get("file"):
+        bits.append(f"file={info['file']}")
+    if info.get("sha256"):
+        bits.append(f"sha256={info['sha256']}")
+    if info.get("source"):
+        bits.append(f"source={info['source']}")
+    return "* model provenance: " + "; ".join(bits) if bits else ""
 
 
 # ---------------------------------------------------------------------------
@@ -194,15 +244,24 @@ def _source_value(comp: dict[str, Any]) -> str:
     return text
 
 
-def spice_netlist(spec: dict[str, Any]) -> str:
+def spice_netlist(spec: dict[str, Any], base_dir: str | Path | None = None) -> str:
     norm = spec
     ground = norm["ground"]
-    book = ModelBook(norm)
+    book = ModelBook(norm, base_dir)
+    status = model_status(norm, base_dir)
+    if "generic" in status:
+        model_header = [
+            "* Generic device models are placeholders: simulation results are UNVERIFIED",
+            "* until vendor models are supplied.  Verify with the real datasheet.",
+        ]
+    else:
+        model_header = [f"* Models: {status}."]
+        if status == "vendor models supplied":
+            model_header.append("* Provenance is recorded per model below.")
     lines = [
         f"* {norm['name']}: {norm.get('description') or 'circuit'}",
         "* Generated by circuit-design-skill.",
-        "* Generic device models are placeholders: simulation results are UNVERIFIED",
-        "* until vendor models are supplied.  Verify with the real datasheet.",
+        *model_header,
         "",
     ]
 
@@ -215,32 +274,38 @@ def spice_netlist(spec: dict[str, Any]) -> str:
         def net(key: str) -> str:
             return spice_net(pins[key], ground)
 
+        def device_with_model(default_order: list[str], terminals: str) -> str:
+            info = book.info_for(comp)
+            if info["subckt"]:
+                order = (comp.get("subckt_pins") or info.get("subckt_pins")
+                         or default_order)
+                nodes = " ".join(net(canonical_pin(ctype, p)) for p in order)
+                return f"X{ref} {nodes} {info['name']}"
+            return f"{element} {terminals} {info['name']}"
+
         if ctype in ("R", "C", "L"):
             device_lines.append(f"{element} {net('1')} {net('2')} {_fmt(comp['value'])}")
         elif ctype in ("V", "I"):
             device_lines.append(f"{element} {net('1')} {net('2')} {_source_value(comp)}")
         elif ctype in ("D", "LED", "ZENER"):
-            model = book.model_for(comp)
-            device_lines.append(f"{element} {net('1')} {net('2')} {model}")
+            device_lines.append(device_with_model(["1", "2"], f"{net('1')} {net('2')}"))
         elif ctype in ("NPN", "PNP"):
-            model = book.model_for(comp)
-            device_lines.append(f"{element} {net('1')} {net('2')} {net('3')} {model}")
+            device_lines.append(
+                device_with_model(["1", "2", "3"],
+                                  f"{net('1')} {net('2')} {net('3')}"))
         elif ctype in ("NMOS", "PMOS"):
-            model = book.model_for(comp)
             # Standard 4-terminal SPICE MOSFET; bulk tied to source.
             device_lines.append(
-                f"{element} {net('1')} {net('2')} {net('3')} {net('3')} {model}"
-            )
+                device_with_model(["1", "2", "3", "3"],
+                                  f"{net('1')} {net('2')} {net('3')} {net('3')}"))
         elif ctype == "OPAMP":
-            model = book.model_for(comp)
             device_lines.append(
-                f"{element} {net('1')} {net('2')} {net('3')} {net('4')} {net('5')} {model}"
-            )
+                device_with_model(["1", "2", "3", "4", "5"],
+                                  f"{net('1')} {net('2')} {net('3')} {net('4')} {net('5')}"))
         elif ctype == "SW":
-            model = book.model_for(comp)
             device_lines.append(
-                f"{element} {net('1')} {net('2')} {net('3')} {net('4')} {model}"
-            )
+                device_with_model(["1", "2", "3", "4"],
+                                  f"{net('1')} {net('2')} {net('3')} {net('4')}"))
         elif ctype in ("E", "G"):
             device_lines.append(
                 f"{element} {net('1')} {net('2')} {net('3')} {net('4')} {_fmt(comp['value'])}"
@@ -331,9 +396,10 @@ def _asc_value(comp: dict[str, Any], model: str | None) -> str:
     return _fmt(comp["value"])
 
 
-def ltspice_asc(spec: dict[str, Any], *, version: str = "4") -> str:
+def ltspice_asc(spec: dict[str, Any], *, version: str = "4",
+               base_dir: str | Path | None = None) -> str:
     norm = spec
-    book = ModelBook(norm)
+    book = ModelBook(norm, base_dir)
     ground = norm["ground"]
     positions = _asc_layout(norm["components"])
     lines = [f"Version {version}", "SHEET 1 880 680"]
@@ -344,10 +410,23 @@ def ltspice_asc(spec: dict[str, Any], *, version: str = "4") -> str:
         ctype, ref = comp["type"], comp["ref"]
         sx, sy = positions[ref]
         symbol, _pins = ASC_SYMBOLS[ctype]
-        model = book.model_for(comp) if ctype in GENERIC_MODELS or ctype in ("SW", "OPAMP") else None
+        info = book.info_for(comp) if ctype in GENERIC_MODELS or ctype in ("SW", "OPAMP") else None
+        model = info["name"] if info else None
+        if info and info["subckt"]:
+            order = [canonical_pin(ctype, pin)
+                     for pin in (comp.get("subckt_pins") or info.get("subckt_pins") or [])]
+            natural = sorted(asc_pins(ctype, 0, 0), key=int)
+            if order != natural:
+                raise ValueError(
+                    f"{ref}: LTspice export of subcircuit {model!r} needs subckt_pins "
+                    f"in symbol order {natural}, got {order or 'none'}"
+                )
         lines.append(f"SYMBOL {symbol} {sx} {sy} R0")
         lines.append(f"SYMATTR InstName {ref}")
         lines.append(f"SYMATTR Value {_asc_value(comp, model)}")
+        if info and info["subckt"]:
+            # A subcircuit instance is an X device, not a built-in M/Q/D.
+            lines.append("SYMATTR Prefix X")
         if ctype in ("V", "I") and comp.get("ac"):
             lines.append(f"SYMATTR Value2 AC {_fmt(float(comp['ac']))}")
         params = comp.get("params") or {}
@@ -593,9 +672,29 @@ def bom_csv(spec: dict[str, Any]) -> str:
     return buf.getvalue()
 
 
+def model_table(spec: dict[str, Any],
+                base_dir: str | Path | None = None) -> list[dict[str, str]]:
+    """Per-semiconductor model provenance for the report."""
+    rows: list[dict[str, str]] = []
+    for record in model_records(spec, base_dir):
+        info = record["resolved"] or {}
+        rows.append({
+            "Ref": record["ref"],
+            "Type": record["type"],
+            "Model": record["model"] or "(generic)",
+            "Kind": "generic" if record["generic"] else str(info.get("kind", "declared")),
+            "Vendor": str(info.get("vendor") or ""),
+            "Part": str(info.get("part") or ""),
+            "Source": str(info.get("source") or ""),
+            "SHA256": str(info.get("sha256") or "")[:16],
+        })
+    return rows
+
+
 def build_report(spec: dict[str, Any], files: dict[str, str],
                  warnings: list[str], *, verification: dict[str, Any] | None = None,
-                 pcb: dict[str, Any] | None = None) -> dict[str, Any]:
+                 pcb: dict[str, Any] | None = None,
+                 base_dir: str | Path | None = None) -> dict[str, Any]:
     return {
         "name": spec["name"],
         "description": spec.get("description", ""),
@@ -612,7 +711,7 @@ def build_report(spec: dict[str, Any], files: dict[str, str],
         "files": files,
         "verification": verification,
         "pcb": pcb,
-        "simulation_status": model_status(spec),
+        "simulation_status": model_status(spec, base_dir),
     }
 
 
@@ -662,6 +761,20 @@ def report_markdown(report: dict[str, Any]) -> str:
             f"{row['Value']} | {row['Footprint']} |"
         )
     lines.append("")
+
+    if report.get("models"):
+        lines += [
+            "## Device models",
+            "",
+            "| Ref | Type | Model | Kind | Vendor | Part | SHA256 |",
+            "| --- | --- | --- | --- | --- | --- | --- |",
+        ]
+        for row in report["models"]:
+            lines.append(
+                f"| {row['Ref']} | {row['Type']} | `{row['Model']}` | {row['Kind']} | "
+                f"{row['Vendor']} | {row['Part']} | `{row['SHA256']}` |"
+            )
+        lines.append("")
 
     lines += ["## Analyses", ""]
     for analysis in report["analyses"]:
@@ -748,7 +861,8 @@ def generate(spec_path: str | Path, outdir: str | Path,
              pcb_profile: str | None = None, pcb_layers: int | None = None,
              pcb_skill: str | Path | None = None) -> dict[str, Any]:
     raw = json.loads(Path(spec_path).read_text(encoding="utf-8"))
-    validation = validate_spec(raw)
+    base_dir = Path(spec_path).resolve().parent
+    validation = validate_spec(raw, base_dir=base_dir)
     if not validation["ok"]:
         raise ValueError("invalid design spec: " + "; ".join(validation["errors"]))
     spec = validation["normalized"]
@@ -770,17 +884,19 @@ def generate(spec_path: str | Path, outdir: str | Path,
 
     if "spice" in formats:
         path = out / f"{name}.cir"
-        path.write_text(spice_netlist(spec), encoding="utf-8")
+        path.write_text(spice_netlist(spec, base_dir=base_dir), encoding="utf-8")
         files["spice"] = path.name
     if "ltspice_asc" in formats:
         models = out / f"{name}.models"
         models.write_text(
-            ModelBook(spec).text(header=f"* models for {name} (generic unless supplied)"),
+            ModelBook(spec, base_dir).text(
+                header=f"* models for {name} ({model_status(spec, base_dir)})"),
             encoding="utf-8",
         )
         files["models"] = models.name
         path = out / f"{name}.asc"
-        path.write_text(ltspice_asc(spec, version=asc_version), encoding="utf-8")
+        path.write_text(ltspice_asc(spec, version=asc_version, base_dir=base_dir),
+                        encoding="utf-8")
         files["ltspice_asc"] = path.name
     if "kicad_net" in formats:
         path = out / f"{name}.net"
@@ -820,7 +936,9 @@ def generate(spec_path: str | Path, outdir: str | Path,
             if warning not in warnings:
                 warnings.append(warning)
     report = build_report(spec, files, warnings,
-                          verification=verification, pcb=pcb_summary)
+                          verification=verification, pcb=pcb_summary,
+                          base_dir=base_dir)
+    report["models"] = model_table(spec, base_dir)
     if "report" in formats:
         path = out / f"{name}-report.md"
         path.write_text(report_markdown(report), encoding="utf-8")

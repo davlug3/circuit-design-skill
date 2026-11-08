@@ -15,6 +15,7 @@ written down.
 | ngspice | The generated netlist runs and converges | Real-device behaviour if models are generic |
 | KiCad ERC | KiCad's own electrical rules accept the schematic | Layout, DRC, DFM, real pads |
 | CI (GitHub Actions) | The same checks ran at a known commit in a pinned image | That this machine can run them; bench behaviour |
+| Vendor model | The simulation uses a named part with recorded vendor/source/hash | That the model matches your reel |
 | Datasheet check | The part can meet the stress | The whole system |
 | Bench measurement | The physical circuit works | All units, all temperatures |
 
@@ -65,9 +66,13 @@ python3 scripts/verify.py specs/rc.json --out out/ --json
     --exit-code-violations`. Exit code 5 means error-level violations and is a
     failure; any other non-zero code is a tool error, not a clean pass. The
     report is written next to the output as `<name>-erc.rpt`.
-11. **Required stages** — `--require simulate,erc,kicad-parse` converts a
-    `SKIP` in a required stage into a failure. This is what CI uses so a
-    missing tool cannot masquerade as a pass.
+11. **Required stages** — `--require simulate,erc,kicad-parse,models` converts
+    a `SKIP` in a required stage into a failure. This is what CI uses so a
+    missing tool or a generic transistor cannot masquerade as a pass.
+12. **Models** — resolves every semiconductor to its declared card. Generic
+    placeholders and declarations without vendor/part/source are reported as
+    `SKIP` (not pass); a missing model file, a hash mismatch or a missing
+    `subckt_pins` order is a validation failure.
 
 ## Local capability and CI
 
@@ -135,7 +140,8 @@ regenerated with the evidence.
 
 1. **No "this should work".** If you did not run it, say "not verified".
 2. **Generic models are placeholders.** A simulation with a generic BJT or
-   diode is a smoke test, not a design validation. The report must say so.
+   diode is a smoke test, not a design validation. The report must say so, and
+   a real part needs vendor, part and source provenance (`references/models.md`).
 3. **MNA is linear.** It refuses diodes, BJTs and MOSFETs. Do not linearise
    them silently.
 4. **A structural pass is not ERC/DRC.** KiCad's ERC checks more than the

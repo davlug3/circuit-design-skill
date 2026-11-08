@@ -23,7 +23,7 @@ on:
         default: "examples/rc-lowpass.json"
         type: string
       require:
-        description: "Comma-separated stages that must PASS (simulate,erc,kicad-parse)"
+        description: "Comma-separated stages that must PASS (simulate,erc,kicad-parse,models)"
         required: false
         default: "simulate,erc"
         type: string
@@ -50,6 +50,8 @@ jobs:
           python-version: "3.12"
       - name: Install optional parser
         run: python -m pip install --upgrade pip kiutils
+      - name: Install ngspice
+        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends ngspice
       - name: Run tests
         env:
           PYTHONDONTWRITEBYTECODE: "1"

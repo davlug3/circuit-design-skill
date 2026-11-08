@@ -24,7 +24,9 @@ silently disagree with it.
 3. **Physics first.** Check headroom, polarity, power, thermal, tolerance and
    absolute maximum ratings. A netlist that runs is not a safe circuit.
 4. **State the model.** A generic diode/BJT/MOSFET is a placeholder. Say
-   "unverified (generic models)" until vendor models are supplied.
+   "unverified (generic models)" until a real model with vendor, part and
+   source is recorded in `models`. See `references/models.md`; a `.subckt`
+   model also needs an explicit `subckt_pins` node order.
 5. **Verify, then claim.** Run `scripts/verify.py`. A check that did not run is
    `SKIP`, not `PASS`. Never say "this should work".
 6. **Do not claim ERC/DRC/fab compliance.** This skill produces schematics and
@@ -117,6 +119,11 @@ python3 scripts/generate.py specs/rc.json --out out/ --ltspice-version 4.1
 python3 scripts/generate.py specs/rc.json --out out/ --pcb-board 50x40
 ```
 
+Every semiconductor needs a real model before the simulation means anything:
+supply a vendor `.lib`/`.mod` file (or full card) in `models`, with `vendor`,
+`part` and `source`. A `.subckt` model also needs `subckt_pins`; the generator
+then emits an `X` device in that node order. See `references/models.md`.
+
 Without `--formats`, the spec's `deliverables` list is used. Outputs:
 
 | File | Purpose |
@@ -182,6 +189,8 @@ The verifier re-reads the generated files and checks:
 - linear circuits solve in the independent MNA solver and match closed-form
   expectations;
 - `ngspice` runs the netlist if it is installed and compatible;
+- every semiconductor resolves to a real, traceable model, or is reported as
+  a generic placeholder (add `--require models` to make that a failure);
 - KiCad ERC runs with `--erc` when `kicad-cli` is installed and compatible.
 
 Read `references/verification.md` for what each check proves and what it does
@@ -265,7 +274,7 @@ scripts/ci_dispatch.py       GitHub Actions dispatch with safety checks
 .github/workflows/design.yml  unit tests, KiCad 9 + ngspice verification
 references/                  intake, topologies, analog, digital, power,
                              physics/reliability, LTspice, KiCad, PCB handoff,
-                             verification
+                             models, verification
 examples/                    ready-to-run specs, including rc-lowpass-pcb.json
 tests/                       unit and end-to-end tests
 ```

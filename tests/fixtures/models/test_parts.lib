@@ -1,0 +1,8 @@
+* Synthetic fixture for tests. NOT a real vendor model.
+.model TESTDIODE D(IS=4.352e-9 N=1.906 RS=0.6 BV=75 IBV=1e-5 CJO=1.5e-11)
+.model OTHERDIODE D(IS=1e-14 N=1.0)
+
+.subckt TESTNMOS d g s
+M1 d g s s TESTNMOS_CORE
+.model TESTNMOS_CORE NMOS(VTO=2.1 KP=0.15 LAMBDA=0.01)
+.ends TESTNMOS

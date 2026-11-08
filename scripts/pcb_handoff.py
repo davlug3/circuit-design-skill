@@ -1130,7 +1130,7 @@ def main(argv: list[str] | None = None) -> int:
     ns = parser.parse_args(argv)
     try:
         raw = json.loads(Path(ns.spec).read_text(encoding="utf-8"))
-        report = validate_spec(raw)
+        report = validate_spec(raw, base_dir=Path(ns.spec).resolve().parent)
         if not report["ok"]:
             print("error: invalid design spec: " + "; ".join(report["errors"]),
                   file=sys.stderr)

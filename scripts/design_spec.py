@@ -16,8 +16,10 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -99,6 +101,13 @@ REQUIRED_PINS: dict[str, set[str]] = {
     "E": {"1", "2", "3", "4"}, "G": {"1", "2", "3", "4"},
 }
 
+
+def canonical_pin(ctype: str, pin: Any) -> str:
+    """Map a pin name or alias to the numeric key used in the spec."""
+    mapping = PIN_ALIASES.get(ctype.upper(), {})
+    key = str(pin).upper()
+    return mapping.get(key, mapping.get(str(pin), str(pin)))
+
 # Typical generic models.  These are deliberately conservative and are always
 # reported as generic/unverified.
 GENERIC_MODELS: dict[str, dict[str, Any]] = {
@@ -131,13 +140,170 @@ def uses_generic_model(spec: dict[str, Any], comp: dict[str, Any]) -> bool:
     return not (requested and requested in declared)
 
 
-def model_status(spec: dict[str, Any]) -> str:
+def is_structured_model(raw: Any) -> bool:
+    """A model entry that carries a card or a file, rather than raw SPICE params."""
+    return isinstance(raw, dict) and ("file" in raw or "card" in raw)
+
+
+def _extract_model_block(text: str, name: str) -> tuple[str | None, bool]:
+    """Pull one ``.model`` or ``.subckt`` block out of a vendor library."""
+    subckt = re.compile(rf"^\s*\.subckt\s+{re.escape(name)}\b", re.IGNORECASE | re.MULTILINE)
+    match = subckt.search(text)
+    if match:
+        start = text.rfind("\n", 0, match.start()) + 1
+        depth = 1
+        end = len(text)
+        pos = match.end()
+        while pos < len(text):
+            newline = text.find("\n", pos)
+            line_end = len(text) if newline == -1 else newline + 1
+            line = text[pos:line_end]
+            if re.match(r"^\s*\.subckt\b", line, re.IGNORECASE):
+                depth += 1
+            elif re.match(r"^\s*\.ends\b", line, re.IGNORECASE):
+                depth -= 1
+                if depth == 0:
+                    end = line_end
+                    break
+            pos = line_end
+        return text[start:end].strip(), True
+
+    model = re.compile(rf"^\s*\.model\s+{re.escape(name)}\b", re.IGNORECASE | re.MULTILINE)
+    match = model.search(text)
+    if not match:
+        return None, False
+    start = text.rfind("\n", 0, match.start()) + 1
+    depth = 0
+    opened = False
+    i = match.end()
+    while i < len(text):
+        char = text[i]
+        if char == "(":
+            depth += 1
+            opened = True
+        elif char == ")":
+            depth -= 1
+            if opened and depth == 0:
+                end = text.find("\n", i)
+                return text[start:end if end != -1 else len(text)].strip(), False
+        elif char == "\n" and not opened:
+            # A following line beginning with '+' continues the card.
+            rest = text[i + 1:].lstrip("\r\n \t")
+            if rest.startswith("+"):
+                i += 1
+                continue
+            return text[start:i].strip(), False
+        i += 1
+    return text[start:].strip(), False
+
+
+def resolve_model(spec: dict[str, Any], name: str | None,
+                  base_dir: str | Path | None = None) -> dict[str, Any] | None:
+    """Resolve a declared model to card text plus provenance.
+
+    Returns ``None`` when the model is not declared, or when the declaration
+    uses the legacy parameter-object form (which ``generate.py`` expands).
+    """
+    if not name:
+        return None
+    declared = spec.get("models") or {}
+    raw = declared.get(name)
+    if raw is None:
+        return None
+
+    info: dict[str, Any] = {
+        "name": name, "card": None, "kind": "declared", "subckt": False,
+        "vendor": None, "part": None, "source": None, "sha256": None,
+        "file": None, "subckt_pins": None, "error": None,
+    }
+
+    if isinstance(raw, str):
+        info["card"] = raw.strip()
+        info["subckt"] = bool(re.search(r"^\s*\.subckt\b", info["card"], re.IGNORECASE | re.MULTILINE))
+        return info
+
+    if not is_structured_model(raw):
+        return None  # legacy parameter object; generate.py builds the card
+
+    info["vendor"] = raw.get("vendor")
+    info["part"] = raw.get("part")
+    info["source"] = raw.get("source")
+    info["subckt_pins"] = raw.get("subckt_pins")
+    lookup = str(raw.get("name") or name)
+    info["name"] = lookup
+
+    if raw.get("file"):
+        info["file"] = str(raw["file"])
+        path = Path(str(raw["file"]))
+        if not path.is_absolute() and base_dir is None:
+            # Caller cannot resolve the spec directory; classify from metadata
+            # only. Validation and generation always pass base_dir.
+            if info["vendor"] and (info["part"] or info["source"]):
+                info["kind"] = "vendor"
+            return info
+        if not path.is_absolute() and base_dir is not None:
+            path = Path(base_dir) / path
+        try:
+            data = path.read_bytes()
+        except OSError as exc:
+            info["error"] = f"cannot read model file {path}: {exc}"
+            return info
+        actual = hashlib.sha256(data).hexdigest()
+        declared_hash = raw.get("sha256")
+        if declared_hash and str(declared_hash).lower() != actual:
+            info["error"] = (f"sha256 mismatch for {path}: declared {declared_hash}, "
+                             f"actual {actual}")
+            return info
+        info["sha256"] = actual
+        card, is_subckt = _extract_model_block(data.decode("utf-8", errors="replace"), lookup)
+        if card is None:
+            info["error"] = (f"{path} does not define .model or .subckt {lookup!r}")
+            return info
+        info["card"] = card
+        info["subckt"] = is_subckt
+    else:
+        info["card"] = str(raw["card"]).strip()
+        info["subckt"] = bool(re.search(r"^\s*\.subckt\b", info["card"],
+                                        re.IGNORECASE | re.MULTILINE))
+        if raw.get("sha256"):
+            info["sha256"] = str(raw["sha256"]).lower()
+
+    if info["vendor"] and (info["part"] or info["source"]):
+        info["kind"] = "vendor"
+    return info
+
+
+def model_records(spec: dict[str, Any],
+                  base_dir: str | Path | None = None) -> list[dict[str, Any]]:
+    """One record per semiconductor, including unresolved placeholders."""
+    records: list[dict[str, Any]] = []
+    for comp in spec["components"]:
+        if not requires_model(comp["type"]):
+            continue
+        requested = comp.get("model")
+        resolved = resolve_model(spec, requested, base_dir)
+        records.append({
+            "ref": comp["ref"],
+            "type": comp["type"],
+            "model": requested,
+            "generic": uses_generic_model(spec, comp),
+            "resolved": resolved,
+        })
+    return records
+
+
+def model_status(spec: dict[str, Any], base_dir: str | Path | None = None) -> str:
     """Human-readable simulation provenance for the report and verifier."""
     modelled = [c for c in spec["components"] if requires_model(c["type"])]
     if not modelled:
         return "not applicable (no semiconductor models)"
     if any(uses_generic_model(spec, c) for c in modelled):
         return "unverified (generic models)"
+    resolved = [resolve_model(spec, c.get("model"), base_dir) or {} for c in modelled]
+    if any(info.get("error") for info in resolved):
+        return "model errors (see validation)"
+    if any(info.get("kind") != "vendor" for info in resolved):
+        return "declared models (no vendor provenance)"
     return "vendor models supplied"
 
 
@@ -648,7 +814,7 @@ def validate_pcb(spec: dict[str, Any], comps: list[dict[str, Any]],
     return errors, warnings
 
 
-def validate_spec(spec: dict[str, Any]) -> dict[str, Any]:
+def validate_spec(spec: dict[str, Any], base_dir: str | Path | None = None) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
     try:
@@ -774,6 +940,45 @@ def validate_spec(spec: dict[str, Any]) -> dict[str, Any]:
                 f"{comp['ref']} references model {model!r}, which is not defined in "
                 f"'models'; a generic model card will be emitted instead"
             )
+
+    # Structured model entries: file provenance, hash, and subcircuit pin order.
+    for model_name, raw in (norm["models"] or {}).items():
+        if not is_structured_model(raw):
+            continue
+        info = resolve_model(norm, model_name, base_dir)
+        assert info is not None
+        if info.get("error"):
+            errors.append(f"model {model_name!r}: {info['error']}")
+            continue
+        card_text = str(info.get("card") or "")
+        if not re.search(r"^\s*\.(model|subckt)\b", card_text, re.IGNORECASE | re.MULTILINE):
+            errors.append(
+                f"model {model_name!r}: card does not contain a .model or .subckt definition"
+            )
+            continue
+        if not info.get("vendor") or not (info.get("part") or info.get("source")):
+            warnings.append(
+                f"model {model_name!r} has no vendor/part/source provenance; "
+                f"the report will call it declared, not vendor"
+            )
+        if not info.get("subckt"):
+            continue
+        users = [c for c in comps if c.get("model") == model_name]
+        for comp in users:
+            order = comp.get("subckt_pins") or raw.get("subckt_pins")
+            if not isinstance(order, list) or not order:
+                errors.append(
+                    f"{comp['ref']} uses subcircuit model {model_name!r}; "
+                    f"add 'subckt_pins' listing its node order (e.g. [\"1\", \"2\", \"3\"])"
+                )
+                continue
+            mapped = [canonical_pin(comp["type"], pin) for pin in order]
+            missing = [pin for pin in mapped if pin not in comp["pins"]]
+            if missing:
+                errors.append(
+                    f"{comp['ref']}: subckt_pins refers to missing pin(s) "
+                    f"{', '.join(map(str, missing))}"
+                )
 
     pcb_errors, pcb_warnings = validate_pcb(norm, comps, nets)
     errors.extend(pcb_errors)
@@ -1149,7 +1354,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if ns.command == "validate":
-            report = validate_spec(load_spec(ns.spec))
+            report = validate_spec(load_spec(ns.spec), base_dir=Path(ns.spec).resolve().parent)
             if ns.json:
                 payload = {k: v for k, v in report.items() if k != "normalized"}
                 emit(payload, as_json=True)
@@ -1172,7 +1377,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if ns.command == "normalize":
-            report = validate_spec(load_spec(ns.spec))
+            report = validate_spec(load_spec(ns.spec), base_dir=Path(ns.spec).resolve().parent)
             if not report["ok"]:
                 for err in report["errors"]:
                     print(f"error: {err}", file=sys.stderr)
