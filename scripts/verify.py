@@ -706,6 +706,42 @@ def check_pcb_handoff(spec: dict[str, Any], out: Path) -> Check:
     )
 
 
+def _parse_ascii_raw(text: str) -> dict[str, dict[str, Any]]:
+    """Parse ngspice's ASCII rawfile into {plotname: {vars, values}}."""
+    plots: dict[str, dict[str, Any]] = {}
+    current: dict[str, Any] | None = None
+    lines = text.splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if line.startswith("Plotname:"):
+            current = {"vars": [], "values": []}
+            plots[line.split(":", 1)[1].strip()] = current
+        elif current is not None and line.startswith("Variables:"):
+            i += 1
+            while i < len(lines) and lines[i].strip() and not lines[i].startswith("Values:"):
+                parts = lines[i].split()
+                if len(parts) >= 2:
+                    current["vars"].append(parts[1])
+                i += 1
+            continue
+        elif current is not None and line.startswith("Values:"):
+            i += 1
+            while i < len(lines):
+                stripped = lines[i].strip()
+                if not stripped or stripped.startswith("Plotname:"):
+                    break
+                parts = stripped.split()
+                if len(parts) >= 2 and parts[0].lstrip("-").isdigit():
+                    current["values"].append(parts[1])
+                elif len(parts) == 1:
+                    current["values"].append(parts[0])
+                i += 1
+            continue
+        i += 1
+    return plots
+
+
 def _run_ngspice(netlist: Path) -> Check:
     capability = env_probe.probe_ngspice()
     if not capability.get("supported"):
@@ -724,8 +760,10 @@ def _run_ngspice(netlist: Path) -> Check:
             proc = subprocess.run(
                 # -r writes every analysis to a rawfile. Without it, ngspice 42
                 # exits 1 when an .ac analysis produces no printable output.
+                # ASCII keeps the rawfile readable without a parser dependency.
                 [exe, "-b", "-o", str(log), "-r", str(raw), str(netlist)],
                 capture_output=True, text=True, timeout=120,
+                env={**os.environ, "SPICE_ASCIIRAWFILE": "1"},
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             return Check("ngspice", False, f"ngspice could not run: {exc}")
@@ -743,8 +781,33 @@ def _run_ngspice(netlist: Path) -> Check:
         if proc.returncode != 0:
             return Check("ngspice", False, f"ngspice exited with {proc.returncode}",
                          evidence)
-        # Best-effort parse of the operating-point table.
+
+        # Parse the ASCII rawfile. A completed run with plots is evidence even
+        # when the operating-point table is not printable.
+        raw_text = raw.read_text(errors="replace") if raw.exists() else ""
+        plots = _parse_ascii_raw(raw_text)
         voltages: dict[str, float] = {}
+        for plot_name, plot in plots.items():
+            if "operating point" not in plot_name.lower():
+                continue
+            for var, value in zip(plot["vars"], plot["values"]):
+                if not var.lower().startswith("v("):
+                    continue
+                try:
+                    voltages[var[2:-1]] = float(value)
+                except ValueError:
+                    pass
+        if plots:
+            detail = (f"ngspice ran {len(plots)} analysis plot(s): "
+                      + ", ".join(plots))
+            if voltages:
+                detail += "; " + ", ".join(
+                    f"V({k})={v:.6g}" for k, v in voltages.items())
+            return Check("ngspice", True, detail,
+                         {**evidence, "plots": list(plots),
+                          "node_voltages_V": voltages})
+
+        # Fall back to the printed table when a rawfile was not produced.
         in_table = False
         for line in text.splitlines():
             if re.match(r"\s*Node\s+Voltage", line):
