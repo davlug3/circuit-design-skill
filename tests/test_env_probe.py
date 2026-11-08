@@ -29,13 +29,17 @@ def _make_exec(path: Path, body: str) -> Path:
 class TempPath:
     """Prepend a directory to PATH for the duration of a test."""
 
-    def __init__(self, directory: Path):
+    def __init__(self, directory: Path, replace: bool = False):
         self.directory = directory
+        self.replace = replace
         self.old = None
 
     def __enter__(self):
         self.old = os.environ.get("PATH", "")
-        os.environ["PATH"] = f"{self.directory}:{self.old}"
+        if self.replace:
+            os.environ["PATH"] = str(self.directory)
+        else:
+            os.environ["PATH"] = f"{self.directory}:{self.old}"
         env_probe._CACHE.clear()
         return self
 
@@ -65,7 +69,7 @@ class TestFailureDetail(unittest.TestCase):
 class TestNgspiceProbe(unittest.TestCase):
     def test_missing_binary_is_not_incompatible(self):
         with tempfile.TemporaryDirectory() as td:
-            with TempPath(Path(td)):
+            with TempPath(Path(td), replace=True):
                 result = env_probe.probe_ngspice()
         self.assertFalse(result["ok"])
         self.assertFalse(result["supported"])
