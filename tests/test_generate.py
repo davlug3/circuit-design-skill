@@ -137,6 +137,7 @@ class TestScaffolds(unittest.TestCase):
             "led": {"vs": "5", "vf": "2", "if": "10m"},
             "i2c": {"vdd": "3.3", "rp": "1k5", "cb": "200p"},
             "opamp_noninverting": {"gain": "10", "rg": "1k"},
+            "opamp_inverting": {"gain": "10", "rin": "1k"},
             "zener_regulator": {"vin": "12", "vz": "5.1", "rs": "470"},
             "buck": {"vin": "12", "vout": "5", "iout": "2", "fsw": "500k"},
         }
