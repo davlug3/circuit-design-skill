@@ -389,6 +389,19 @@ def normalize_component(comp: dict[str, Any]) -> tuple[dict[str, Any], list[str]
     for key in ("footprint", "model", "notes", "params", "waveform"):
         if key in comp:
             out[key] = comp[key]
+    if "placement" in comp:
+        placement = comp["placement"]
+        if not isinstance(placement, dict) or set(placement) != {"x_mm", "y_mm"}:
+            raise ValueError(f"{ref}: placement must contain only x_mm and y_mm")
+        x, y = placement["x_mm"], placement["y_mm"]
+        if any(not isinstance(v, (int, float)) or isinstance(v, bool)
+               or not math.isfinite(float(v)) or float(v) <= 0 for v in (x, y)):
+            raise ValueError(f"{ref}: placement coordinates must be finite and positive")
+        grid = 1.27
+        if (not math.isclose(float(x) / grid, round(float(x) / grid), abs_tol=1e-6)
+                or not math.isclose(float(y) / grid, round(float(y) / grid), abs_tol=1e-6)):
+            raise ValueError(f"{ref}: placement must align to the KiCad 1.27 mm grid")
+        out["placement"] = {"x_mm": float(x), "y_mm": float(y)}
     for key in ("dc", "ac", "gain", "rout"):
         if key in comp:
             out[key] = float(comp[key])
