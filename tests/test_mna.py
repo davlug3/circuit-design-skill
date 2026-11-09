@@ -69,7 +69,7 @@ class TestBasicMNA(unittest.TestCase):
         # A 1e20-ohm path has a 1e-20 S conductance. It is valid and must
         # not be rejected by an absolute pivot threshold.
         c = Circuit(ground="GND")
-        c.I("I1", "OUT", "GND", dc=1e-12)
+        c.I("I1", "GND", "OUT", dc=1e-12)
         c.R("R1", "OUT", "GND", 1e20)
         self.assertAlmostEqual(c.dc_voltage("OUT"), 1e8, delta=1e-3)
 
