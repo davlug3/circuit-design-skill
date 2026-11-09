@@ -521,11 +521,33 @@ def _kicad_effects(size: float = 1.27, hide: bool = False, justify: str | None =
 
 
 def _kicad_layout(components: list[dict[str, Any]]) -> dict[str, tuple[float, float]]:
+    """Place symbols on a 1.27 mm grid, honoring explicit per-component overrides."""
     cols = 4 if len(components) > 3 else max(1, len(components))
     out: dict[str, tuple[float, float]] = {}
     for i, comp in enumerate(components):
         row, col = divmod(i, cols)
-        out[comp["ref"]] = (63.5 + col * 63.5, 50.8 + row * 50.8)
+        default = (63.5 + col * 63.5, 50.8 + row * 50.8)
+        placement = comp.get("placement") or {}
+        if not placement:
+            out[comp["ref"]] = default
+            continue
+        if "x_mm" not in placement or "y_mm" not in placement:
+            raise ValueError(f"{comp['ref']}: placement requires x_mm and y_mm")
+        x, y = float(placement["x_mm"]), float(placement["y_mm"])
+        if not math.isfinite(x) or not math.isfinite(y) or x <= 0 or y <= 0:
+            raise ValueError(f"{comp['ref']}: placement coordinates must be finite and positive")
+        grid = 1.27
+        if not math.isclose(x / grid, round(x / grid), abs_tol=1e-6) or not math.isclose(
+            y / grid, round(y / grid), abs_tol=1e-6
+        ):
+            raise ValueError(f"{comp['ref']}: placement must align to the KiCad 1.27 mm grid")
+        out[comp["ref"]] = (x, y)
+    occupied: dict[tuple[float, float], str] = {}
+    for ref, point in out.items():
+        key = (round(point[0], 4), round(point[1], 4))
+        if key in occupied:
+            raise ValueError(f"KiCad placement collision: {ref} and {occupied[key]} share {point}")
+        occupied[key] = ref
     return out
 
 
