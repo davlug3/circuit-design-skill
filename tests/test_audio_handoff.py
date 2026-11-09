@@ -72,6 +72,21 @@ def mapping() -> dict:
     }
 
 
+def write_audio_skill(root: Path, status: str = "verified",
+                      source_id: str = "S041") -> Path:
+    """Create a minimal audio-skill tree with a source registry."""
+    skill = root / "audio-engineering-skill"
+    (skill / "catalog").mkdir(parents=True, exist_ok=True)
+    (skill / "catalog" / "sources.json").write_text(
+        json.dumps({"schema_version": 1, "sources": [
+            {"id": source_id, "title": "Audio specification",
+             "status": status},
+        ]}),
+        encoding="utf-8",
+    )
+    return skill
+
+
 class TestMerge(unittest.TestCase):
     def test_maps_requirements_metrics_and_conditions(self):
         merged = merge(handoff(), base_spec(), mapping())
@@ -209,10 +224,43 @@ class TestMerge(unittest.TestCase):
             merge(handoff(), base_spec(), map_data)
 
 
+class TestRegistry(unittest.TestCase):
+    def test_verified_source_passes(self):
+        merged = merge(handoff(), base_spec(), mapping(),
+                       registry={"S041": {"id": "S041",
+                                          "status": "verified"}})
+        self.assertEqual(merged["design"]["sources"][0]["id"], "S041")
+
+    def test_candidate_source_is_rejected(self):
+        with self.assertRaisesRegex(MergeError, "not verified"):
+            merge(handoff(), base_spec(), mapping(),
+                  registry={"S041": {"id": "S041",
+                                     "status": "candidate"}})
+
+    def test_unknown_source_is_rejected(self):
+        with self.assertRaisesRegex(MergeError, "unknown source S041"):
+            merge(handoff(), base_spec(), mapping(), registry={})
+
+    def test_requirement_source_must_be_listed(self):
+        payload = handoff()
+        payload["sources"] = []
+        with self.assertRaisesRegex(MergeError, "must be a non-empty list"):
+            merge(payload, base_spec(), mapping(),
+                  registry={"S041": {"id": "S041", "status": "verified"}})
+
+    def test_duplicate_listed_source_is_rejected(self):
+        payload = handoff()
+        payload["sources"].append(dict(payload["sources"][0]))
+        with self.assertRaisesRegex(MergeError, "duplicate source id S041"):
+            merge(payload, base_spec(), mapping(),
+                  registry={"S041": {"id": "S041", "status": "verified"}})
+
+
 class TestCli(unittest.TestCase):
     def test_merge_and_write(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
+            skill = write_audio_skill(root)
             (root / "handoff.json").write_text(json.dumps(handoff()), encoding="utf-8")
             (root / "base.json").write_text(json.dumps(base_spec()), encoding="utf-8")
             (root / "map.json").write_text(json.dumps(mapping()), encoding="utf-8")
@@ -224,6 +272,7 @@ class TestCli(unittest.TestCase):
                     "--base", str(root / "base.json"),
                     "--map", str(root / "map.json"),
                     "--out", str(out),
+                    "--audio-skill", str(skill),
                 ])
             self.assertEqual(code, 0)
             merged = json.loads(out.read_text(encoding="utf-8"))
@@ -242,6 +291,41 @@ class TestCli(unittest.TestCase):
                     "--base", str(root / "base.json"),
                     "--map", str(root / "map.json"),
                     "--out", str(root / "merged.json"),
+                ])
+            self.assertEqual(code, 1)
+
+    def test_explicit_missing_registry_fails(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "handoff.json").write_text(json.dumps(handoff()), encoding="utf-8")
+            (root / "base.json").write_text(json.dumps(base_spec()), encoding="utf-8")
+            (root / "map.json").write_text(json.dumps(mapping()), encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()), \
+                    contextlib.redirect_stderr(io.StringIO()):
+                code = main([
+                    "--handoff", str(root / "handoff.json"),
+                    "--base", str(root / "base.json"),
+                    "--map", str(root / "map.json"),
+                    "--out", str(root / "merged.json"),
+                    "--audio-skill", str(root / "missing"),
+                ])
+            self.assertEqual(code, 1)
+
+    def test_require_registry_without_sibling_fails(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "handoff.json").write_text(json.dumps(handoff()), encoding="utf-8")
+            (root / "base.json").write_text(json.dumps(base_spec()), encoding="utf-8")
+            (root / "map.json").write_text(json.dumps(mapping()), encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()), \
+                    contextlib.redirect_stderr(io.StringIO()):
+                code = main([
+                    "--handoff", str(root / "handoff.json"),
+                    "--base", str(root / "base.json"),
+                    "--map", str(root / "map.json"),
+                    "--out", str(root / "merged.json"),
+                    "--audio-skill", str(root / "missing"),
+                    "--require-registry",
                 ])
             self.assertEqual(code, 1)
 

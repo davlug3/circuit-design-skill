@@ -99,6 +99,7 @@ jobs:
             --handoff audio-engineering-skill/examples/mic-preamp-handoff.json \
             --base examples/mic-preamp-base.json \
             --map examples/mic-preamp-map.json \
+            --audio-skill audio-engineering-skill --require-registry \
             --out out-cross/mic-preamp-merged.json
           python scripts/design_spec.py validate out-cross/mic-preamp-merged.json
 

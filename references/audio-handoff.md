@@ -136,6 +136,10 @@ The circuit skill's CI has a cross-repo job that checks out both repositories,
 validates the audio handoff with the audio skill's own linter, merges
 `examples/mic-preamp-handoff.json`, and validates the resulting spec.
 
+When the sibling is found (see below), the merge also checks every cited and
+listed source against the audio registry: it must exist and be `verified`.
+`--require-registry` makes a missing sibling a failure instead of a warning.
+
 ## Status
 
 - Contract defined and published by the audio skill.
@@ -148,8 +152,9 @@ validates the audio handoff with the audio skill's own linter, merges
   perceptual claim. State the model provenance and the test conditions.
 - The audio skill validates the handoff with
   `source_check.py --strict --handoff <file>`; every requirement source must be
-  verified and listed, and every metric must reference an existing requirement.
-  The sibling repo ships `examples/mic-preamp-handoff.json`.
+  verified and listed, every metric must use a supported measure and reference
+  an existing requirement. The sibling repo ships
+  `examples/mic-preamp-handoff.json`.
 - The circuit skill's CI verifies `examples/rc-lowpass-metrics.json` with
   ngspice and requires the `simulate` stage, so the metric path is exercised
   end to end on a real simulator.
@@ -158,10 +163,11 @@ validates the audio handoff with the audio skill's own linter, merges
 
 The repository is
 [`davlug3/audio-engineering-skill`](https://github.com/davlug3/audio-engineering-skill).
-When installed as a sibling directory, it is normally
-`../audio-engineering-skill`. Future integration may use an
-`AUDIO_ENGINEERING_SKILL` environment variable, following the PCB skill's
-pattern. No runtime import is required: the handoff is plain JSON.
+Search order: `--audio-skill`, the `AUDIO_ENGINEERING_SKILL` environment
+variable, `../audio-engineering-skill` next to this repository, then
+`./audio-engineering-skill`. A candidate is used only when it contains
+`catalog/sources.json`. No runtime import is required: the handoff is plain
+JSON, and a missing sibling only skips the provenance check.
 
 ## Non-goals
 

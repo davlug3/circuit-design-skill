@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import design_spec  # noqa: E402
 
 HANDOFF_VERSION = 1
+AUDIO_SKILL_ENV = "AUDIO_ENGINEERING_SKILL"
 
 
 class MergeError(ValueError):
@@ -90,13 +92,115 @@ def _merge_by_id(existing: Any, incoming: Any, label: str) -> list[dict[str, Any
     return result
 
 
+def find_audio_skill(explicit: str | Path | None = None) -> Path | None:
+    """Locate the sibling audio skill, or return ``None``.
+
+    Search order: explicit path, ``AUDIO_ENGINEERING_SKILL``, the parent of
+    this repository, then the current directory.  A candidate counts only when
+    it has ``catalog/sources.json``.
+    """
+    candidates: list[Path] = []
+    if explicit:
+        candidate = Path(explicit)
+        if (candidate / "catalog" / "sources.json").is_file():
+            return candidate.resolve()
+        return None
+    env = os.environ.get(AUDIO_SKILL_ENV)
+    if env:
+        candidates.append(Path(env))
+    repo_root = Path(__file__).resolve().parents[1]
+    for base in (repo_root.parent, Path.cwd()):
+        candidates.append(base / "audio-engineering-skill")
+    for candidate in candidates:
+        if (candidate / "catalog" / "sources.json").is_file():
+            return candidate.resolve()
+    return None
+
+
+def load_audio_registry(skill: Path) -> dict[str, dict[str, Any]]:
+    """Load the audio skill's source registry, keyed by source id."""
+    path = skill / "catalog" / "sources.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise MergeError(f"audio registry {path}: {exc}") from exc
+    entries = data.get("sources") if isinstance(data, dict) else None
+    if not isinstance(entries, list):
+        raise MergeError(f"audio registry {path}: sources must be a list")
+    registry: dict[str, dict[str, Any]] = {}
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            raise MergeError(
+                f"audio registry {path}: sources[{index}] must be an object")
+        sid = entry.get("id")
+        if not isinstance(sid, str) or not sid:
+            raise MergeError(
+                f"audio registry {path}: sources[{index}] needs an id")
+        registry[sid] = entry
+    return registry
+
+
+def verify_sources(handoff: dict[str, Any],
+                   registry: dict[str, dict[str, Any]]) -> None:
+    """Require every cited and listed source to be verified in the registry.
+
+    This mirrors ``source_check.py --handoff`` in the audio skill so an
+    unvalidated handoff cannot pass the merge with unverified provenance.
+    """
+    listed = handoff.get("sources")
+    if not isinstance(listed, list) or not listed:
+        raise MergeError("handoff.sources must be a non-empty list")
+    listed_ids: set[str] = set()
+    for index, source in enumerate(listed):
+        where = f"handoff.sources[{index}]"
+        if not isinstance(source, dict):
+            raise MergeError(f"{where} must be an object")
+        sid = source.get("id")
+        if not isinstance(sid, str) or not sid:
+            raise MergeError(f"{where}: id must be a non-empty string")
+        if sid in listed_ids:
+            raise MergeError(f"{where}: duplicate source id {sid}")
+        listed_ids.add(sid)
+        entry = registry.get(sid)
+        if entry is None:
+            raise MergeError(f"{where}: unknown source {sid}")
+        if entry.get("status") != "verified":
+            raise MergeError(
+                f"{where}: source {sid} is {entry.get('status')!r}, "
+                f"not verified")
+
+    requirements = handoff.get("requirements")
+    if not isinstance(requirements, list):
+        raise MergeError("handoff.requirements must be a list")
+    for index, requirement in enumerate(requirements):
+        if not isinstance(requirement, dict):
+            continue
+        sid = requirement.get("source")
+        if not isinstance(sid, str) or not sid:
+            continue
+        if sid not in listed_ids:
+            raise MergeError(
+                f"handoff.requirements[{index}]: source {sid} is not listed "
+                f"in handoff.sources")
+        entry = registry.get(sid)
+        if entry is None:
+            raise MergeError(
+                f"handoff.requirements[{index}]: unknown source {sid}")
+        if entry.get("status") != "verified":
+            raise MergeError(
+                f"handoff.requirements[{index}]: source {sid} is "
+                f"{entry.get('status')!r}, not verified")
+
+
 def merge(handoff: dict[str, Any], base: dict[str, Any],
-          mapping: dict[str, Any]) -> dict[str, Any]:
+          mapping: dict[str, Any],
+          registry: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
     """Return a circuit design spec built from the three inputs.
 
     The base spec supplies components, analyses and deliverables.  The handoff
     supplies requirements, conditions, architecture, risks, sources and limits.
     The mapping supplies the electrical test points for each handoff metric.
+    When ``registry`` is supplied, every cited source must be verified there.
     """
     if not isinstance(handoff, dict):
         raise MergeError("handoff must be an object")
@@ -108,6 +212,8 @@ def merge(handoff: dict[str, Any], base: dict[str, Any],
         raise MergeError("handoff.application is required")
     if not isinstance(base, dict) or not _nonempty(base.get("name")):
         raise MergeError("base spec must be an object with a non-empty name")
+    if registry is not None:
+        verify_sources(handoff, registry)
 
     spec = copy.deepcopy(base)
     design = dict(spec.get("design") or {})
@@ -260,12 +366,31 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--map", dest="mapping", required=True,
                         help="metric mapping JSON")
     parser.add_argument("--out", required=True, help="merged spec JSON")
+    parser.add_argument("--audio-skill",
+                        help="path to the audio-engineering-skill directory")
+    parser.add_argument("--require-registry", action="store_true",
+                        help="fail when the audio registry cannot be found")
     args = parser.parse_args(argv)
     try:
         handoff = _load(args.handoff, "handoff")
         base = _load(args.base, "base spec")
         mapping = _load(args.mapping, "mapping")
-        merged = merge(handoff, base, mapping)
+        skill = find_audio_skill(args.audio_skill)
+        if args.audio_skill and skill is None:
+            raise MergeError(
+                f"audio skill {args.audio_skill}: catalog/sources.json not found")
+        if skill is None:
+            if args.require_registry:
+                raise MergeError(
+                    f"--require-registry: audio-engineering-skill not found; "
+                    f"pass --audio-skill or set {AUDIO_SKILL_ENV}")
+            print(f"WARN  [audio] sibling audio-engineering-skill not found; "
+                  f"source ids were not checked against its registry",
+                  file=sys.stderr)
+            registry = None
+        else:
+            registry = load_audio_registry(skill)
+        merged = merge(handoff, base, mapping, registry=registry)
         report = validate_merged(merged, Path(args.base).resolve().parent)
         if not report["ok"]:
             for error in report["errors"]:

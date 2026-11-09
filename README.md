@@ -299,8 +299,13 @@ python3 scripts/audio_handoff.py \
   --handoff ../audio-engineering-skill/examples/mic-preamp-handoff.json \
   --base examples/mic-preamp-base.json \
   --map examples/mic-preamp-map.json \
-  --out out/mic-preamp-merged.json
+  --out out/mic-preamp-merged.json --require-registry
 ```
+
+The sibling is found with `--audio-skill`, `AUDIO_ENGINEERING_SKILL`, or a
+relative search. When present, every cited source is checked against the audio
+registry; `--require-registry` turns a missing sibling into a failure instead
+of a warning.
 
 CI checks out both repositories, validates the handoff with the audio skill's
 linter, merges it and validates the resulting spec.
