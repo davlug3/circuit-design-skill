@@ -74,6 +74,7 @@ REQUIRED_CHECK = {
     "kicad-parse": "kicad_schematic",
     "models": "models",
     "design": "design",
+    "limits": "operating_limits",
 }
 
 
@@ -996,6 +997,76 @@ def check_design(spec: dict[str, Any]) -> Check:
     )
 
 
+def check_operating_limits(spec: dict[str, Any]) -> Check:
+    """Check explicitly calculated stresses against sourced datasheet limits.
+
+    This check validates the supplied numeric stress and limit record; it does
+    not independently derive stresses from a SPICE operating point.
+    """
+    design = spec.get("design") or {}
+    limits = design.get("operating_limits") or []
+    if not limits:
+        return Check(
+            "operating_limits", None,
+            "no operating limits declared; add calculated stresses and sourced datasheet limits",
+        )
+    if not isinstance(limits, list):
+        return Check("operating_limits", False, "design.operating_limits must be a list")
+
+    evidence: list[dict[str, Any]] = []
+    failures: list[str] = []
+    for index, item in enumerate(limits):
+        if not isinstance(item, dict):
+            failures.append(f"item {index + 1} is not an object")
+            continue
+        ident = str(item.get("id") or f"item-{index + 1}")
+        required_fields = ("parameter", "value", "unit", "condition", "source")
+        missing = [field for field in required_fields if item.get(field) in (None, "")]
+        if missing:
+            failures.append(f"{ident}: missing " + ", ".join(missing))
+            continue
+        try:
+            value = float(item["value"])
+            lower = float(item["min"]) if item.get("min") is not None else None
+            upper = float(item["max"]) if item.get("max") is not None else None
+        except (TypeError, ValueError):
+            failures.append(f"{ident}: value/min/max must be numeric")
+            continue
+        if not math.isfinite(value) or (lower is not None and not math.isfinite(lower)) or (upper is not None and not math.isfinite(upper)):
+            failures.append(f"{ident}: value/min/max must be finite")
+            continue
+        if lower is None and upper is None:
+            failures.append(f"{ident}: at least one of min or max is required")
+            continue
+        if lower is not None and upper is not None and lower > upper:
+            failures.append(f"{ident}: min exceeds max")
+            continue
+        passed = (lower is None or value >= lower) and (upper is None or value <= upper)
+        record = {
+            "id": ident, "parameter": item["parameter"], "value": value,
+            "unit": item["unit"], "min": lower, "max": upper,
+            "condition": item["condition"], "source": item["source"],
+            "margin_to_min": value - lower if lower is not None else None,
+            "margin_to_max": upper - value if upper is not None else None,
+            "passed": passed,
+        }
+        evidence.append(record)
+        if not passed:
+            failures.append(
+                f"{ident}: {item['parameter']}={value:g} {item['unit']} "
+                f"outside [{lower if lower is not None else '-inf'}, "
+                f"{upper if upper is not None else '+inf'}]"
+            )
+
+    if failures:
+        return Check("operating_limits", False, "; ".join(failures), evidence)
+    return Check(
+        "operating_limits", True,
+        f"{len(evidence)} calculated stresses are within their declared sourced limits",
+        evidence,
+    )
+
+
 def check_kicad_erc(sch: Path, out: Path) -> Check:
     """Run KiCad's own ERC, but only when kicad-cli is actually usable here."""
     capability = env_probe.probe_kicad_cli()
@@ -1139,6 +1210,7 @@ def verify(spec_path: str | Path, outdir: str | Path,
               {"stats": validation.get("stats", {})}),
         check_models(spec, base_dir),
         check_design(spec),
+        check_operating_limits(spec),
     ]
 
     paths = {
@@ -1261,7 +1333,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--erc", action="store_true",
                         help="also run KiCad ERC when kicad-cli is compatible")
     parser.add_argument("--require", metavar="STAGES",
-                        help="comma-separated stages that must PASS: design, models, simulate, erc, kicad-parse")
+                        help="comma-separated stages that must PASS: design, limits, models, simulate, erc, kicad-parse")
     ns = parser.parse_args(argv)
     required = [s.strip() for s in (ns.require or "").split(",") if s.strip()]
     unknown = [s for s in required if s not in REQUIRED_CHECK]
