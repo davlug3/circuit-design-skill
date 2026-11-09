@@ -99,8 +99,9 @@ class TestGenerateRC(unittest.TestCase):
     def test_test_plan_artifact(self):
         from design_spec import scaffold
         spec = scaffold("rc_lowpass", {"r": "1k", "c": "100n"}, name="plan")
-        spec["design"]["requirements"] = [{"id": "R1", "text": "Corner frequency within 5%"}]
-        spec["design"]["measurements"] = [{
+        design = spec.setdefault("design", {})
+        design["requirements"] = [{"id": "R1", "text": "Corner frequency within 5%"}]
+        design["measurements"] = [{
             "id": "M1", "requirement": "R1", "test_point": "IN/OUT",
             "quantity": "gain and cutoff frequency", "method": "AC sweep",
             "equipment": "function generator and oscilloscope",
