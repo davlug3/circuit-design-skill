@@ -237,6 +237,23 @@ The questions are in `references/intake.md`. If the user cannot answer, the
 skill proposes a default and records it in the spec's `assumptions`. It does
 not hide assumptions in the netlist.
 
+## Bench test plan
+
+Add a `design.measurements` array to the spec. Each measurement links to a
+requirement and defines the test point, measured quantity, method, equipment,
+conditions and acceptance criterion. Generation writes a standalone
+`<name>-test-plan.md` with requirement traceability.
+
+Require it at release with:
+
+```bash
+python3 scripts/verify.py specs/design.json --out out/ --require measurements
+```
+
+This validates that the plan is actionable and traceable; it does not claim a
+measurement has been performed. Record actual readings and instrument
+calibration status during bench bring-up.
+
 ## Verification levels
 
 | Level | Proves | Does not prove |
