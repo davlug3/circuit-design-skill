@@ -24,7 +24,8 @@ class TestPlainLanguageBuckWorkflow(unittest.TestCase):
         prompt = PROMPT.read_text()
         self.assertIn("Build a 5 V power supply from a 12 V DC input", prompt)
         self.assertIn("Clarifications and locked assumptions", prompt)
-        self.assertIn("not a production design", prompt)
+        self.assertIn("not silently inferred requirements", prompt)
+        self.assertIn("production design", prompt)
 
         spec = json.loads(EXAMPLE.read_text())
         self.assertEqual(spec["topology"], "buck")
