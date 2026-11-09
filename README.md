@@ -265,7 +265,7 @@ calculation. Use `--require limits` to make missing or out-of-range records fail
 ## Topologies with scaffolds
 
 `rc_lowpass`, `rc_highpass`, `divider`, `sallen_key_lp`, `sallen_key_hp`,
-`bjt_ce`, `led`, `i2c`, `opamp_noninverting`, `zener_regulator`, `buck`.
+`bjt_ce`, `led`, `i2c`, `opamp_noninverting`, `opamp_inverting`, `zener_regulator`, `buck`.
 
 Any other topology can be described with an explicit component list. The spec
 is the contract; see `schemas/design-spec.schema.json`.
