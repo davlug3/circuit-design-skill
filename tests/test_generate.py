@@ -66,6 +66,25 @@ class TestGenerateRC(unittest.TestCase):
                 expected = generate.spice_net(comp["pins"][pin], self.spec["ground"])
                 self.assertEqual(flags.get((x, y)), expected, f"{comp['ref']} pin {pin}")
 
+    def test_component_tolerance_survives_normalization(self):
+        from design_spec import validate_spec
+        spec = json.loads(self.spec_path.read_text())
+        resistor = next(item for item in spec["components"] if item["type"] == "R")
+        resistor["tolerance_percent"] = 1.0
+        normalized = validate_spec(spec)
+        self.assertTrue(normalized["ok"], normalized["errors"])
+        r = next(item for item in normalized["normalized"]["components"] if item["type"] == "R")
+        self.assertEqual(r["tolerance_percent"], 1.0)
+
+    def test_component_tolerance_rejects_invalid_values(self):
+        from design_spec import validate_spec
+        spec = json.loads(self.spec_path.read_text())
+        resistor = next(item for item in spec["components"] if item["type"] == "R")
+        resistor["tolerance_percent"] = 100.0
+        result = validate_spec(spec)
+        self.assertFalse(result["ok"])
+        self.assertTrue(any("tolerance_percent" in error for error in result["errors"]))
+
     def test_kicad_netlist(self):
         root = parse_sexp((self.out / f"{self.name}.net").read_text())
         nets = {}

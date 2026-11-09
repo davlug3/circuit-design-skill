@@ -827,15 +827,16 @@ def report_markdown(report: dict[str, Any]) -> str:
     lines += [
         "## Components",
         "",
-        "| Ref | Type | Value | Pins | Notes |",
-        "| --- | --- | --- | --- | --- |",
+        "| Ref | Type | Value | Tolerance | Pins | Notes |",
+        "| --- | --- | --- | --- | --- | --- |",
     ]
     for comp in report["components"]:
         pins = ", ".join(f"{k}={v}" for k, v in sorted(comp["pins"].items()))
         value = _bom_value(comp)
         lines.append(
-            f"| {comp['ref']} | {comp['type']} | {value} | {pins} | "
-            f"{comp.get('notes', '') or comp.get('footprint', '')} |"
+            f"| {comp['ref']} | {comp['type']} | {value} | "
+            f"{('±' + str(comp['tolerance_percent']) + '%') if comp.get('tolerance_percent') is not None else '—'} | "
+            f"{pins} | {comp.get('notes', '') or comp.get('footprint', '')} |"
         )
     lines.append("")
 
