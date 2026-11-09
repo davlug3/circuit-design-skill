@@ -1342,7 +1342,7 @@ def calc_tolerance(p: dict[str, Any]) -> dict[str, Any]:
             value, tolerance = float(spec), 0.0
         elif isinstance(spec, dict) and "value" in spec:
             value = float(spec["value"])
-            tolerance = float(spec.get("tol", spec.get("tolerance_percent", 0.0))) / 100.0
+            tolerance = float(spec.get("tol", spec.get("tol_percent", spec.get("tolerance_percent", 0.0)))) / 100.0
         else:
             raise CalcError(f"{name}: expected a number or an object with a value")
         if not math.isfinite(value) or not math.isfinite(tolerance):
