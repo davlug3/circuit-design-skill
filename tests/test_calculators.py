@@ -21,6 +21,7 @@ from circuit_calc import (  # noqa: E402
     calc_rc,
     calc_sallen_key,
     calc_thermal,
+    calc_tolerance,
     calc_trace,
     calc_zener,
 )
@@ -52,6 +53,40 @@ class TestPassive(unittest.TestCase):
     def test_rc_design_from_fc(self):
         out = calc_rc({"fc": 1e3, "c": 100e-9})
         self.assertAlmostEqual(out["results"]["r_ohm"], 1 / (2 * math.pi * 1e3 * 100e-9))
+
+
+class TestTolerance(unittest.TestCase):
+    def test_exact_rc_corner_range(self):
+        out = calc_tolerance({
+            "mode": "rc_fc",
+            "components": {"r": {"value": 1000, "tol": 1},
+                           "c": {"value": 100e-9, "tol": 10}},
+        })
+        r = out["results"]
+        expected_min = 1 / (2 * math.pi * 1010 * 110e-9)
+        expected_max = 1 / (2 * math.pi * 990 * 90e-9)
+        self.assertEqual(r["corners_evaluated"], 4)
+        self.assertAlmostEqual(r["worst_case_range"][0], expected_min)
+        self.assertAlmostEqual(r["worst_case_range"][1], expected_max)
+        self.assertEqual(r["worst_case_corners"]["minimum"], {"r": "max", "c": "max"})
+        self.assertEqual(r["worst_case_corners"]["maximum"], {"r": "min", "c": "min"})
+
+    def test_exact_divider_corners_include_supply_tolerance(self):
+        out = calc_tolerance({
+            "mode": "divider",
+            "components": {"vin": {"value": 12, "tol": 5},
+                           "r1": {"value": 10000, "tol": 1},
+                           "r2": {"value": 4700, "tol": 5}},
+        })
+        self.assertEqual(out["results"]["corners_evaluated"], 8)
+        self.assertLess(out["results"]["worst_case_range"][0], out["results"]["nominal"])
+        self.assertGreater(out["results"]["worst_case_range"][1], out["results"]["nominal"])
+
+    def test_rejects_invalid_tolerance(self):
+        with self.assertRaises(Exception):
+            calc_tolerance({"mode": "rc_fc", "components": {
+                "r": {"value": 1000, "tol": 100}, "c": {"value": 1e-7}
+            }})
 
 
 class TestSallenKey(unittest.TestCase):
