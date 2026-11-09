@@ -100,6 +100,17 @@ class TestScaffoldVerification(unittest.TestCase):
             mna = next(c for c in result["checks"] if c["name"] == "mna_linear")
             self.assertIsNone(mna["ok"])
 
+    def test_inverting_opamp_gain(self):
+        with tempfile.TemporaryDirectory() as td:
+            spec = scaffold("opamp_inverting", {"gain": "10", "rin": "1k"}, name="inv")
+            path = Path(td) / "inv.json"
+            path.write_text(dumps(spec))
+            result = verify.verify(path, td)
+            self.assertTrue(result["ok"], result["summary"])
+            gain = next(c for c in result["checks"] if c["name"] == "opamp_gain")
+            self.assertTrue(gain["ok"], gain["detail"])
+            self.assertAlmostEqual(gain["evidence"]["actual"], 10.0, delta=0.05)
+
     def test_opamp_gain(self):
         with tempfile.TemporaryDirectory() as td:
             spec = scaffold("opamp_noninverting", {"gain": "10", "rg": "1k"},
