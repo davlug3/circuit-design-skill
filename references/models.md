@@ -187,3 +187,52 @@ cannot be represented by the built-in 3-pin symbols.
 
 Supply the model, record the provenance, run `verify.py --require models
 --require simulate`, and read the datasheet before trusting the number.
+
+## Playbook: parts missing from the catalog / variable or hard-to-model devices
+
+`catalog/models.json` is curated and small. When a part is missing (common for
+op-amps, JFETs, germanium diodes, regulators, obsolete/specialty parts), use
+this procedure.
+
+1. **Find the best available source** (in order): manufacturer model/download
+   page, manufacturer SPICE library, authorized distributor model with clear
+   provenance, then reputable open mirrors. Record the exact URL, file name,
+   vendor, part, revision/date if shown, and access date.
+2. **Acquire without weakening trust**. Prefer `--url` when TLS/origin is
+   valid. If a site has certificate/download issues, download manually with a
+   trusted client, verify origin, and use `--file` with `--source`. Do not
+   globally disable verification.
+3. **Identify the model form**. `.model` devices are inlined as model cards;
+   `.subckt` devices become `X` instances and **require** `subckt_pins` in the
+   subcircuit's node order. For op-amps/JFETs/MOSFETs, confirm the pin order
+   from the subcircuit header/documentation before trusting it.
+4. **Install with provenance**:
+   ```bash
+   python3 scripts/model_fetch.py --file <path> --part <PART> --name <MODEL> \
+     --vendor "<vendor>" --source "<url>" [--type D|NPN|PNP|NMOS|PMOS] \
+     [--subckt-pins A,K|D,G,S|IN+,IN-,V+,V-,OUT] --out models/
+   ```
+   Or use `--url`/catalog `--part` when available. Keep the SHA-256 and source.
+5. **Map logical pins carefully**. SPICE node order, symbol pin order, and
+   physical package/footprint pads can differ (the 1N4148 package-cathode vs.
+   SPICE-anode note is the canonical example). Record a datasheet-based
+   `pcb.pin_map` for multi-pin parts; never copy `subckt_pins` into a footprint
+   pad map.
+6. **Sanity-check the model** before relying on it:
+   - DC operating point (rails, bias, current direction/polarity).
+   - Key small-signal behavior (gain, bandwidth, input/output swing/headroom).
+   - Device limits implied by the design (breakdown, reverse leakage, Vgs(off)/
+     Idss spread for JFETs, forward drop spread for germanium diodes).
+   - Compare at least one point to a datasheet graph/table or a hand
+     calculation. A convergence-only “run” is not validation.
+7. **Document variability and substitutions**. Germanium diodes (`1N34A`-class),
+   JFETs (`2N5457`/`2N7000`-class behavior varies by family/device), and some
+   obsolete parts have wide spread, temperature dependence, and inconsistent
+   modern substitutes. Record: nominal assumption, expected spread, what
+   parameter matters (e.g. Vf/Ir/Cj, Vgs(off)/Idss/gm), and the bench test or
+   selection/binning needed.
+8. **State the claim honestly**. If the model is an approximation, family model,
+   or community-derived model, keep it as **declared/unverified for the physical
+   part** unless provenance and fit are sufficient; report simulation limits in
+   the design/report. Use bench measurement or characterization for
+   performance-critical claims.

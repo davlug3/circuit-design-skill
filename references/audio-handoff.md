@@ -39,10 +39,19 @@ The audio skill emits `handoff.json`:
 }
 ```
 
-Source ids refer to the sibling audio registry. They must be `verified` there,
-and the condition in each acceptance limit must be carried into the analysis or
-metric block. The examples above use S041 and S045, which are verified in the
-audio registry at the time of writing.
+Source ids refer to the sibling audio registry/evidence workflow. They must be
+`verified` there, and the condition in each acceptance limit must be carried
+into the analysis or metric block. The examples above use S041 and S045, which
+are verified in the audio registry at the time of writing.
+
+### Terminology (audio ↔ circuit)
+
+| Term | Audio meaning | Circuit meaning |
+|---|---|---|
+| `S###` source ID | Verified registry entry backing a requirement/claim | Record in `design.sources[]` (and keep provenance/link/revision/accessed context); add datasheet/app-note sources for electrical decisions |
+| `A#`/requirement ID | Audio requirement identifier | Preserved in `design.requirements[]`; every non-exploratory metric references an existing requirement |
+| Conditions | Measurement/application conditions (level, frequency, bandwidth, load, source impedance, weighting/method) | `metrics.conditions` and matching `analyses[]`; do not compare numbers without matching conditions |
+| `exploratory` metric | Useful target not yet contractually required/provable | May be simulated if supported, but do not claim it as a required verified pass without evidence/support |
 
 Merge mapping:
 

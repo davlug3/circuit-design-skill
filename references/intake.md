@@ -8,6 +8,13 @@ are grouped so a user can answer quickly, and each one maps to a field in
 If the user cannot answer a question, propose a default **and record it in
 `assumptions`**. Never leave a hidden assumption in the netlist.
 
+## 0. Defaults confirmation gate
+
+Before creating specs, handoffs, or generated artifacts, restate the locked
+defaults and assumptions and get explicit confirmation (e.g. `defaults
+confirmed`) or a list of changes. Do not silently lock revision/topology,
+power, bypass, build form factor, anchor source, or unverified substitutions.
+
 ## 1. Function and topology
 
 | Question | Why it matters | Spec field |
@@ -15,6 +22,10 @@ If the user cannot answer a question, propose a default **and record it in
 | What must the circuit do, in one sentence? | Drives topology and verification | `description` |
 | Is it analog, digital, mixed-signal, or power? | Selects analysis and models | `topology` |
 | Which topology do you expect? | Avoids inventing a novel circuit | `topology` |
+| **If this is a clone/variant family, which exact revision/topology is the target?** | Values, buffering, bypass, and behavior vary by revision | `description`, `design.requirements` |
+| **Primary anchor source** (schematic/analysis/datasheet link or name)? | Locks evidence; conflicts must be recorded, not averaged | `design.sources`, `design.decisions` |
+| **Known conflicts between sources** and which one wins? | Prevents mixing incompatible revisions/values | `design.risks`, `design.decisions` |
+| **Allowed substitutions** (parts, values, features, tolerances)? | Controls what “equivalent” means | `assumptions`, `design.decisions` |
 | Is there an existing schematic, netlist or reference design? | The existing netlist wins over a guessed topology | `components` |
 | What is the input signal: source, amplitude, impedance, bandwidth? | Sets drive, noise and stability requirements | `input` |
 | What is the load: resistance, capacitance, current, inductive? | Sets output stage and stability | `output.load` |

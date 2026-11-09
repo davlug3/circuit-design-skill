@@ -26,7 +26,11 @@ a datasheet, an application note, a standard, or a measurement.
    in `templates/`.
 2. **Ask before guessing.** Use the intake questions in
    `references/intake.md`. If the user cannot answer, propose a default and
-   record it in `assumptions`.
+   record it in `assumptions`. Before generating artifacts, restate locked
+   defaults/assumptions and get explicit confirmation (e.g. `defaults
+   confirmed` or a list of changes). For clone/variant designs, lock the target
+   revision/topology, primary anchor source, known source conflicts, and
+   allowed substitutions.
 3. **Every calculation is Python.** Do not do arithmetic in prose that the
    scripts could do. Use `scripts/circuit_calc.py` or the MNA solver.
 4. **Physics first.** Check headroom, polarity, power, thermal, tolerance and
