@@ -96,6 +96,25 @@ class TestGenerateRC(unittest.TestCase):
         self.assertIn("Bill of materials", text)
         self.assertIn("Verification", text)
 
+    def test_test_plan_artifact(self):
+        from design_spec import scaffold
+        spec = scaffold("rc_lowpass", {"r": "1k", "c": "100n"}, name="plan")
+        spec["design"]["requirements"] = [{"id": "R1", "text": "Corner frequency within 5%"}]
+        spec["design"]["measurements"] = [{
+            "id": "M1", "requirement": "R1", "test_point": "IN/OUT",
+            "quantity": "gain and cutoff frequency", "method": "AC sweep",
+            "equipment": "function generator and oscilloscope",
+            "conditions": "1 Vrms input, 10 Hz to 100 kHz, nominal load",
+            "acceptance": "fc within 5% of target", "safety": "current-limited supply"
+        }]
+        path = self.out / "plan.json"
+        path.write_text(json.dumps(spec))
+        result = generate.generate(path, self.out)
+        plan = self.out / "plan-test-plan.md"
+        self.assertTrue(plan.exists())
+        self.assertIn("Requirement traceability", plan.read_text())
+        self.assertEqual(result["files"]["test_plan"], plan.name)
+
 
 class TestGenerateBuck(unittest.TestCase):
     def test_generic_models_and_switching(self):
