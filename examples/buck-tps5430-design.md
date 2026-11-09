@@ -78,9 +78,9 @@ temperature coefficients and board leakage in the worst-case calculation.
 - Nominal duty estimate: `5 V / 12 V = 41.7%` (ideal CCM approximation).
 - At the TI reference's 19.8 V maximum input and 15 µH / 500 kHz, ideal
   inductor ripple is approximately
-  `ΔIL = VOUT × (1 − VOUT/VIN) / (L × fSW) = 0.99 A p-p`.
+  `ΔIL = VOUT × (1 − VOUT/VIN) / (L × fSW) = 0.50 A p-p`.
   At 2 A average load, the ideal peak inductor/diode current is approximately
-  `2 A + 0.99 A / 2 = 2.50 A`. Recalculate using actual inductance under bias,
+  `2 A + 0.99 A / 2 = 2.25 A`. Recalculate using actual inductance under bias,
   switching-frequency limits, diode drop, parasitics and tolerances.
 - With 300 mV p-p input ripple, TI's reference calculation gives capacitor
   voltage peak of approximately `VIN(max) + ΔVIN/2`; at 19.8 V this is
