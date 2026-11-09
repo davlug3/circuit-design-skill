@@ -14,9 +14,27 @@ from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 SHARED_SCRIPTS = SKILL_DIR.parent / "_shared" / "design-interact" / "scripts"
-sys.path.insert(0, str(SHARED_SCRIPTS))
+def _load_shared_dependency():
+    """Load the optional shared UI and explain how to install it when absent."""
+    if not SHARED_SCRIPTS.is_dir():
+        raise RuntimeError(
+            "shared design-interact UI not found. Expected "
+            f"'{SHARED_SCRIPTS}'. Clone/install the shared design-interact "
+            "repository at that sibling path; see README.md, 'Graphical interaction'."
+        )
 
-import design_interact as di  # noqa: E402
+    shared_path = str(SHARED_SCRIPTS)
+    if shared_path not in sys.path:
+        sys.path.insert(0, shared_path)
+    try:
+        import design_interact
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "could not import the shared design-interact UI "
+            f"from '{SHARED_SCRIPTS}' (missing module: {exc.name}). "
+            "Check the shared repository installation and its dependencies."
+        ) from exc
+    return design_interact
 
 
 def _load_json(path: Path) -> dict:
@@ -148,7 +166,6 @@ def main(argv: list[str] | None = None) -> int:
     p_intake = sub.add_parser("intake", help="ask intake/defaults questions")
     p_intake.add_argument("--out", required=True)
     p_intake.add_argument("--title")
-    for a in ("--host",): pass
     p_intake.add_argument("--host", default="127.0.0.1")
     p_intake.add_argument("--mobile", action="store_true")
     p_intake.add_argument("--port", type=int, default=8771)
@@ -176,6 +193,12 @@ def main(argv: list[str] | None = None) -> int:
     status_file = out_path.with_suffix(".status.json")
     log_file = out_path.with_suffix(".log")
     host = "0.0.0.0" if args.mobile else args.host
+
+    try:
+        di = _load_shared_dependency()
+    except RuntimeError as exc:
+        print(f"graphical interaction unavailable: {exc}", file=sys.stderr)
+        return 2
 
     if args.command == "intake":
         payload = di.normalize_payload(build_intake_payload(title=args.title))
