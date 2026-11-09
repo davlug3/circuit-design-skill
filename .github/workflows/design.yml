@@ -3,6 +3,8 @@ name: Circuit design verification
 on:
   push:
     paths:
+      - "SKILL.md"
+      - "README.md"
       - "scripts/**"
       - "schemas/**"
       - "catalog/**"
@@ -13,6 +15,8 @@ on:
       - ".github/workflows/design.yml"
   pull_request:
     paths:
+      - "SKILL.md"
+      - "README.md"
       - "scripts/**"
       - "schemas/**"
       - "catalog/**"
