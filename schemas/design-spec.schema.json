@@ -156,6 +156,12 @@
             ],
             "description": "Numeric value in SI units, or a SPICE value string such as 4k7."
           },
+          "tolerance_percent": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMaximum": 100,
+            "description": "Symmetric component tolerance from its datasheet; used in explicit worst-case analysis."
+          },
           "pins": {
             "type": "object",
             "description": "Pin number/alias to net name. Aliases: A/B, +/-, C/B/E, D/G/S, IN+/IN-/V+/V-/OUT.",
