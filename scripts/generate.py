@@ -698,6 +698,38 @@ def model_table(spec: dict[str, Any],
     return rows
 
 
+def test_plan_markdown(spec: dict[str, Any]) -> str:
+    """Render the declared bench measurements as a standalone review artifact."""
+    design = spec.get("design") or {}
+    measurements = design.get("measurements") or []
+    requirements = {
+        str(item.get("id")): item.get("text", "")
+        for item in design.get("requirements") or [] if isinstance(item, dict)
+    }
+    lines = [
+        f"# {spec['name']} — Test and measurement plan", "",
+        "This plan defines bench evidence. Simulation results do not replace these measurements.", "",
+        "| ID | Requirement | Test point | Quantity | Method | Equipment | Conditions | Acceptance | Safety / notes |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for item in measurements:
+        values = [
+            item.get("id", ""), item.get("requirement", ""), item.get("test_point", ""),
+            item.get("quantity", ""), item.get("method", ""), item.get("equipment", ""),
+            item.get("conditions", ""), item.get("acceptance", ""),
+            " ".join(str(x) for x in (item.get("safety", ""), item.get("notes", "")) if x),
+        ]
+        cells = [str(value).replace("|", "\\|").replace("\n", " ") for value in values]
+        lines.append("| " + " | ".join(cells) + " |")
+    lines += ["", "## Requirement traceability", ""]
+    for ident, text_value in requirements.items():
+        linked = [item.get("id", "") for item in measurements if item.get("requirement") == ident]
+        lines.append(f"- **{ident}:** {text_value} — measurements: {', '.join(linked) if linked else 'not covered'}")
+    lines += ["", "## Execution record", "",
+              "Record actual measured values, instrument identifiers/calibration status, date, operator, deviations and pass/fail against the acceptance criteria before release.", ""]
+    return "\n".join(lines)
+
+
 def build_report(spec: dict[str, Any], files: dict[str, str],
                  warnings: list[str], *, verification: dict[str, Any] | None = None,
                  pcb: dict[str, Any] | None = None,
@@ -1026,6 +1058,12 @@ def generate(spec_path: str | Path, outdir: str | Path,
         for warning in pcb_summary.get("warnings", []):
             if warning not in warnings:
                 warnings.append(warning)
+    measurements = (spec.get("design") or {}).get("measurements") or []
+    if measurements:
+        test_plan_path = out / f"{name}-test-plan.md"
+        test_plan_path.write_text(test_plan_markdown(spec), encoding="utf-8")
+        files["test_plan"] = test_plan_path.name
+
     report = build_report(spec, files, warnings,
                           verification=verification, pcb=pcb_summary,
                           base_dir=base_dir)

@@ -288,6 +288,26 @@
             }
           }
         },
+        "measurements": {
+          "type": "array",
+          "description": "Bench validation plan. Each measurement must trace to a design requirement and specify setup, equipment and acceptance criteria.",
+          "items": {
+            "type": "object",
+            "required": ["id", "requirement", "test_point", "quantity", "method", "equipment", "conditions", "acceptance"],
+            "properties": {
+              "id": {"type": "string"},
+              "requirement": {"type": "string"},
+              "test_point": {"type": "string"},
+              "quantity": {"type": "string"},
+              "method": {"type": "string"},
+              "equipment": {"type": "string"},
+              "conditions": {"type": "string"},
+              "acceptance": {"type": "string"},
+              "safety": {"type": "string"},
+              "notes": {"type": "string"}
+            }
+          }
+        },
         "operating_limits": {
           "type": "array",
           "description": "Calculated worst-case stresses checked against sourced component datasheet operating limits. --require limits makes this gate mandatory.",
