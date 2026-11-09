@@ -1,6 +1,6 @@
 ---
 name: circuit-design-skill
-description: Design analog, digital, mixed-signal and power circuits from requirements to verified files. Use when planning a design, comparing architectures, choosing parts, sizing components, checking op-amp/filter/converter/transistor behaviour, finding and ingesting real SPICE models, producing an LTspice .asc/.cir, a SPICE netlist, or KiCad .kicad_sch/.net files, or verifying that a schematic and netlist agree. Includes intake questions, a planning and evidence workflow, part-selection decision records, open-web research guidance, closed-form calculators, a pure-Python MNA solver, model provenance, and evidence-based verification.
+description: Design analog, digital, mixed-signal and power circuits from requirements to verified files. Use when planning a design, comparing architectures, choosing parts, sizing components, checking op-amp/filter/converter/transistor behaviour, finding and ingesting real SPICE models, producing an LTspice .asc/.cir, a SPICE netlist, or KiCad .kicad_sch/.net files, or verifying that a schematic and netlist agree. Includes intake questions, a planning and evidence workflow, part-selection decision records, open-web research guidance, closed-form calculators, discrete E-series optimization for RC low-pass designs, a pure-Python MNA solver, model provenance, and evidence-based verification.
 license: MIT
 ---
 
@@ -169,7 +169,26 @@ Formulas and design notes live in `references/topologies.md`,
 `references/analog.md`, `references/digital.md`, `references/power.md` and
 `references/physics-reliability.md`.
 
-### 4. Generate
+### 4. Optimize, then generate
+
+For supported first-order RC low-pass designs, search standard E-series values
+against the target cutoff and exact independent R/C tolerance corners:
+
+```bash
+python3 scripts/optimize.py specs/rc.json --target-fc 1.59k \\
+  --r-min 1k --r-max 100k --c-min 10n --c-max 1u \\
+  --r-tol 1 --c-tol 10 --max-error-percent 5 \\
+  --out-spec specs/rc-optimized.json --require-feasible
+```
+
+The optimizer ranks discrete candidates by worst-case cutoff error and records
+the search method in the output spec. It currently supports `rc_lowpass` only
+and assumes an ideal source and unloaded output. It does not optimize loaded
+filters, active filters or nonlinear/power topologies. Simulate the optimized
+spec with the actual source/load and verify datasheet operating limits before
+accepting it. See `references/optimization.md`.
+
+### 5. Generate
 
 ```bash
 python3 scripts/generate.py specs/rc.json --out out/
@@ -219,7 +238,7 @@ with a net label at every pin. This is intentional: it avoids fragile
 autorouting and makes the connectivity exact. Clean up the presentation in
 LTspice or KiCad if you need a publication-quality drawing.
 
-### 5. PCB handoff
+### 6. PCB handoff
 
 PCB files are opt-in: add `"pcb"` to `deliverables`, pass `--pcb-board
 WIDTHxHEIGHT`, or add `pcb` to `--formats`. The handoff needs a board size; it
@@ -244,7 +263,7 @@ pin map from the real datasheet is mandatory for multi-pin parts. An op-amp
 Do not claim a board is manufacturable until the PCB skill's DRC, DFM,
 unconnected and netlist-parity gates pass.
 
-### 6. Verify
+### 7. Verify
 
 ```bash
 python3 scripts/verify.py specs/rc.json --out out/
@@ -300,7 +319,7 @@ CI dispatch requires a git repository with a pushed branch and the
 commit or a spec outside the repository, because GitHub would verify a
 different revision.
 
-### 7. Report
+### 8. Report
 
 The report states the design, the assumptions, the warnings, the analyses and
 the verification evidence. Quote it; do not replace it with a vague summary.
@@ -344,6 +363,7 @@ schemas/design-spec.schema.json
 catalog/models.json          known fetchable model sources (part, model, vendor)
 scripts/circuit_common.py    value parsing, E-series, result envelope
 scripts/circuit_calc.py      26 calculators and CLI
+scripts/optimize.py          discrete E-series RC low-pass optimizer
 scripts/mna.py               pure-Python linear MNA solver
 scripts/design_spec.py       validate / normalize / scaffold / model resolution
 scripts/symbols.py           LTspice and KiCad symbol geometry
@@ -362,6 +382,7 @@ references/                  planning and research, part selection, intake,
                              physics/reliability, LTspice, KiCad, PCB handoff,
                              models, metrics, verification
 templates/                   design plan, decision record, research log
+references/optimization.md   discrete search method, assumptions and limits
 examples/                    ready-to-run specs, including rc-lowpass-pcb.json,
                              rc-lowpass-metrics.json and the audio handoff
                              fixtures
