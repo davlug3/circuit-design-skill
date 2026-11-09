@@ -184,7 +184,7 @@ def main(argv: list[str] | None = None) -> int:
             print("No candidate meets --max-error-percent; no spec was written.", file=sys.stderr)
             return 2
         args.out_spec.parent.mkdir(parents=True, exist_ok=True)
-        args.out_spec.write_text(json.dumps(result["optimized_spec"], indent=2) + "\\n", encoding="utf-8")
+        args.out_spec.write_text(json.dumps(result["optimized_spec"], indent=2) + "\n", encoding="utf-8")
         print(json.dumps({k: v for k, v in result.items() if k != "optimized_spec"}, indent=2))
         print(f"Optimized spec written to {args.out_spec}")
         return 0 if result["ok"] else 1
