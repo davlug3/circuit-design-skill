@@ -301,7 +301,19 @@ class Circuit:
                 total -= M[row][c] * y[c]
             y[row] = total / M[row][row]
 
-        return [y[j] / column_scale[j] for j in range(n)]
+        x = [y[j] / column_scale[j] for j in range(n)]
+
+        # Check the solution against the unscaled system. The row-wise
+        # backward error is unit-independent and catches unstable solves.
+        for i in range(n):
+            residual = sum(A[i][j] * x[j] for j in range(n)) - z[i]
+            scale = abs(z[i]) + sum(abs(A[i][j]) * abs(x[j]) for j in range(n))
+            if abs(residual) > 1e-10 * max(scale, 1e-300):
+                raise MNAError(
+                    "numerically unstable solution: scaled linear solve failed "
+                    "the normalized residual check"
+                )
+        return x
 
     def _solution_to_nodes(
         self, x: list[complex], node_index: dict[str, int], branch_index: dict[str, int]
