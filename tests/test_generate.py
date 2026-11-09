@@ -66,6 +66,26 @@ class TestGenerateRC(unittest.TestCase):
                 expected = generate.spice_net(comp["pins"][pin], self.spec["ground"])
                 self.assertEqual(flags.get((x, y)), expected, f"{comp['ref']} pin {pin}")
 
+    def test_kicad_placement_override(self):
+        spec = json.loads(self.spec_path.read_text())
+        resistor = next(item for item in spec["components"] if item["type"] == "R")
+        resistor["placement"] = {"x_mm": 101.6, "y_mm": 76.2}
+        path = self.out / "placed.json"
+        path.write_text(json.dumps(spec))
+        generate.generate(path, self.out)
+        schematic = (self.out / "placed.kicad_sch").read_text()
+        self.assertIn("(at 101.6 76.2 0)", schematic)
+
+    def test_kicad_placement_rejects_off_grid_and_collisions(self):
+        spec = json.loads(self.spec_path.read_text())
+        resistor = next(item for item in spec["components"] if item["type"] == "R")
+        resistor["placement"] = {"x_mm": 101.0, "y_mm": 76.2}
+        with self.assertRaisesRegex(ValueError, "1.27 mm grid"):
+            generate.kicad_schematic(spec)
+        resistor["placement"] = {"x_mm": 63.5, "y_mm": 50.8}
+        with self.assertRaisesRegex(ValueError, "collision"):
+            generate.kicad_schematic(spec)
+
     def test_kicad_netlist(self):
         root = parse_sexp((self.out / f"{self.name}.net").read_text())
         nets = {}
