@@ -34,7 +34,10 @@ a datasheet, an application note, a standard, or a measurement.
 3. **Every calculation is Python.** Do not do arithmetic in prose that the
    scripts could do. Use `scripts/circuit_calc.py` or the MNA solver.
 4. **Physics first.** Check headroom, polarity, power, thermal, tolerance and
-   absolute maximum ratings. A netlist that runs is not a safe circuit.
+   absolute maximum ratings. A netlist that runs is not a safe circuit. Use
+   exact tolerance-corner analysis for supported scalar equations, then verify
+   worst-case component stresses against sourced datasheet limits. Do not treat
+   nominal values or first-order RSS estimates as guaranteed worst cases.
 5. **Cite the evidence.** Every critical parameter, formula, derating rule and
    part choice needs a source a reviewer can open: datasheet revision, app
    note, standard clause, or measurement. See
@@ -149,6 +152,10 @@ Rules:
 ```bash
 python3 scripts/circuit_calc.py <command> [--json] [--param value ...]
 python3 scripts/circuit_calc.py list
+
+# Exact worst-case corners plus sensitivity/RSS for an RC cutoff
+python3 scripts/circuit_calc.py tolerance --mode rc_fc \\
+  --components '{"r":{"value":1000,"tol":1},"c":{"value":1e-7,"tol":10}}' --json
 ```
 
 26 commands:
@@ -161,7 +168,11 @@ python3 scripts/circuit_calc.py list
 | Power | `ldo`, `buck`, `boost`, `battery`, `thermal`, `trace` |
 | Digital/interface | `i2c`, `adc`, `logic` |
 
-Every command returns the same envelope: `ok`, `inputs`, `results`,
+The tolerance command enumerates every min/max combination (up to 16 variables),
+reports the exact range and corner assignments, and retains first-order
+sensitivity/RSS as separate estimates. It does not model temperature drift,
+aging or correlated tolerances unless those effects are included in the input
+ranges. Every command returns the same envelope: `ok`, `inputs`, `results`,
 `formulas`, `assumptions`, `warnings`, `notes`. Use `--json` when you need to
 feed the result into a spec.
 
@@ -268,6 +279,8 @@ unconnected and netlist-parity gates pass.
 ```bash
 python3 scripts/verify.py specs/rc.json --out out/
 python3 scripts/verify.py specs/rc.json --out out/ --json
+# Require explicit, sourced component stress checks before calling the design accepted
+python3 scripts/verify.py specs/rc.json --out out/ --require limits
 ```
 
 The verifier re-reads the generated files and checks:
@@ -287,6 +300,7 @@ The verifier re-reads the generated files and checks:
   `references/metrics.md`);
 - every semiconductor resolves to a real, traceable model, or is reported as
   a generic placeholder (add `--require models` to make that a failure);
+- every declared operating stress is within its sourced min/max datasheet limit; `--require limits` makes a missing or failing limits record a failure;
 - the `design` record has requirements, an architecture, sourced decisions,
   risks and sources (add `--require design` to make a missing record a failure);
 - KiCad ERC runs with `--erc` when `kicad-cli` is installed and compatible.

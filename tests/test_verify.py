@@ -29,6 +29,28 @@ class TestVerifyExamples(unittest.TestCase):
             self.assertIn("rc_corner", names)
             self.assertTrue((Path(td) / "rc_lowpass-verification.json").exists())
 
+    def test_operating_limits_pass_and_fail(self):
+        spec = {"design": {"operating_limits": [{
+            "id": "L1", "parameter": "junction temperature", "value": 105,
+            "unit": "degC", "min": -40, "max": 125,
+            "condition": "Vin max, Iout max, Ta 50 degC",
+            "source": "Vendor datasheet rev B, thermal ratings table"
+        }]}}
+        check = verify.check_operating_limits(spec)
+        self.assertTrue(check.ok, check.detail)
+        self.assertEqual(check.evidence[0]["margin_to_max"], 20)
+        spec["design"]["operating_limits"][0]["value"] = 130
+        failed = verify.check_operating_limits(spec)
+        self.assertFalse(failed.ok)
+        self.assertIn("outside", failed.detail)
+
+    def test_required_limits_fails_when_missing(self):
+        with tempfile.TemporaryDirectory() as td:
+            result = verify.verify(EXAMPLES / "rc-lowpass.json", td, required=["limits"])
+            self.assertFalse(result["ok"])
+            required = next(c for c in result["checks"] if c["name"] == "required:limits")
+            self.assertFalse(required["ok"])
+
     def test_sallen_key_highpass_corner(self):
         with tempfile.TemporaryDirectory() as td:
             result = verify.verify(EXAMPLES / "sallen-key-lowpass.json", td)

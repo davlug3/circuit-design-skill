@@ -24,6 +24,22 @@ written down.
 Report the highest level actually reached. "PASS" at a lower level must not be
 phrased as a higher-level claim.
 
+## Worst-case tolerance and operating limits
+
+The `tolerance` calculator enumerates every independent min/max corner for
+supported scalar equations (divider, RC cutoff, sum, product, parallel and
+custom linear expression), up to 16 variables. It also reports local
+sensitivity and RSS, but labels those as estimates. Exact corner enumeration
+is not a nonlinear circuit corner simulation and does not automatically model
+temperature coefficients, aging, voltage coefficients, or correlated parts.
+
+A design can declare `design.operating_limits` entries containing the calculated
+worst-case stress, units, operating condition, datasheet min/max and a source
+reference. `verify.py` checks those records and reports margins. Use
+`--require limits` to fail when no limit record exists or any stress is outside
+its stated bounds. This validates the recorded comparison; it does not
+independently derive the stress or authenticate the datasheet citation.
+
 ## What `verify.py` checks
 
 ```bash
@@ -74,7 +90,7 @@ python3 scripts/verify.py specs/rc.json --out out/ --json
     --exit-code-violations`. Exit code 5 means error-level violations and is a
     failure; any other non-zero code is a tool error, not a clean pass. The
     report is written next to the output as `<name>-erc.rpt`.
-12. **Required stages** — `--require simulate,erc,kicad-parse,models,design`
+12. **Required stages** — `--require simulate,erc,kicad-parse,models,design,limits`
     converts a `SKIP` in a required stage into a failure. This is what CI uses
     so a missing tool, a generic transistor, or an unrecorded decision cannot
     masquerade as a pass.
@@ -82,6 +98,7 @@ python3 scripts/verify.py specs/rc.json --out out/ --json
     placeholders and declarations without vendor/part/source are reported as
     `SKIP` (not pass); a missing model file, a hash mismatch or a missing
     `subckt_pins` order is a validation failure.
+15. **Operating limits** — checks each declared calculated stress against its sourced min/max range and reports margin. This validates the recorded comparison, not the stress calculation or source authenticity; `--require limits` makes the record mandatory.
 14. **Design record** — checks that `design` contains requirements, an
     architecture summary or blocks, decisions, risks and sources. A decision
     with neither a source nor a rationale, or a high risk without a mitigation

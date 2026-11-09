@@ -156,6 +156,12 @@
             ],
             "description": "Numeric value in SI units, or a SPICE value string such as 4k7."
           },
+          "tolerance_percent": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMaximum": 100,
+            "description": "Symmetric component tolerance from its datasheet; used in explicit worst-case analysis."
+          },
           "pins": {
             "type": "object",
             "description": "Pin number/alias to net name. Aliases: A/B, +/-, C/B/E, D/G/S, IN+/IN-/V+/V-/OUT.",
@@ -278,6 +284,26 @@
               "document": {"type": "string"},
               "revision": {"type": "string"},
               "accessed": {"type": "string"},
+              "note": {"type": "string"}
+            }
+          }
+        },
+        "operating_limits": {
+          "type": "array",
+          "description": "Calculated worst-case stresses checked against sourced component datasheet operating limits. --require limits makes this gate mandatory.",
+          "items": {
+            "type": "object",
+            "required": ["id", "parameter", "value", "unit", "condition", "source"],
+            "anyOf": [{"required": ["min"]}, {"required": ["max"]}],
+            "properties": {
+              "id": {"type": "string"},
+              "parameter": {"type": "string"},
+              "value": {"type": "number"},
+              "unit": {"type": "string"},
+              "min": {"type": "number"},
+              "max": {"type": "number"},
+              "condition": {"type": "string"},
+              "source": {"type": "string"},
               "note": {"type": "string"}
             }
           }
