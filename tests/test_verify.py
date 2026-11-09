@@ -51,6 +51,27 @@ class TestVerifyExamples(unittest.TestCase):
             required = next(c for c in result["checks"] if c["name"] == "required:limits")
             self.assertFalse(required["ok"])
 
+    def test_measurement_plan_requires_traceable_acceptance(self):
+        spec = {"design": {
+            "requirements": [{"id": "R1", "text": "Output within 5%"}],
+            "measurements": [{
+                "id": "M1", "requirement": "R1", "test_point": "OUT",
+                "quantity": "output voltage", "method": "DMM",
+                "equipment": "calibrated DMM", "conditions": "Vin=12 V, load=1 kohm",
+                "acceptance": "4.75 to 5.25 V"
+            }]
+        }}
+        self.assertTrue(verify.check_measurement_plan(spec).ok)
+        spec["design"]["measurements"][0]["requirement"] = "UNKNOWN"
+        self.assertFalse(verify.check_measurement_plan(spec).ok)
+
+    def test_required_measurement_plan_fails_when_missing(self):
+        with tempfile.TemporaryDirectory() as td:
+            result = verify.verify(EXAMPLES / "rc-lowpass.json", td, required=["measurements"])
+            self.assertFalse(result["ok"])
+            required = next(c for c in result["checks"] if c["name"] == "required:measurements")
+            self.assertFalse(required["ok"])
+
     def test_sallen_key_highpass_corner(self):
         with tempfile.TemporaryDirectory() as td:
             result = verify.verify(EXAMPLES / "sallen-key-lowpass.json", td)
