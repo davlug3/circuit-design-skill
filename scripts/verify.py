@@ -74,6 +74,7 @@ REQUIRED_CHECK = {
     "kicad-parse": "kicad_schematic",
     "models": "models",
     "design": "design",
+    "measurements": "measurement_plan",
     "limits": "operating_limits",
 }
 
@@ -1067,6 +1068,45 @@ def check_operating_limits(spec: dict[str, Any]) -> Check:
     )
 
 
+def check_measurement_plan(spec: dict[str, Any]) -> Check:
+    """Check that every declared measurement is actionable and traces to a requirement."""
+    design = spec.get("design") or {}
+    measurements = design.get("measurements") or []
+    if not measurements:
+        return Check("measurement_plan", None,
+                     "no measurement plan declared; add design.measurements with test points, setup and acceptance criteria")
+    if not isinstance(measurements, list):
+        return Check("measurement_plan", False, "design.measurements must be a list")
+    requirement_ids = {
+        str(item.get("id")) for item in (design.get("requirements") or [])
+        if isinstance(item, dict) and item.get("id")
+    }
+    seen: set[str] = set()
+    problems: list[str] = []
+    for index, item in enumerate(measurements):
+        if not isinstance(item, dict):
+            problems.append(f"measurement {index + 1} is not an object")
+            continue
+        ident = str(item.get("id") or f"measurement-{index + 1}")
+        if ident in seen:
+            problems.append(f"{ident}: duplicate measurement id")
+        seen.add(ident)
+        required_fields = ("requirement", "test_point", "quantity", "method",
+                           "equipment", "conditions", "acceptance")
+        missing = [field for field in required_fields if item.get(field) in (None, "")]
+        if missing:
+            problems.append(f"{ident}: missing " + ", ".join(missing))
+        requirement = str(item.get("requirement") or "")
+        if requirement and requirement not in requirement_ids:
+            problems.append(f"{ident}: unknown requirement {requirement!r}")
+    if problems:
+        return Check("measurement_plan", False, "; ".join(problems),
+                     {"measurement_count": len(measurements), "requirement_ids": sorted(requirement_ids)})
+    return Check("measurement_plan", True,
+                 f"{len(measurements)} actionable measurements trace to declared requirements",
+                 {"measurement_count": len(measurements), "requirement_ids": sorted(requirement_ids)})
+
+
 def check_kicad_erc(sch: Path, out: Path) -> Check:
     """Run KiCad's own ERC, but only when kicad-cli is actually usable here."""
     capability = env_probe.probe_kicad_cli()
@@ -1210,6 +1250,7 @@ def verify(spec_path: str | Path, outdir: str | Path,
               {"stats": validation.get("stats", {})}),
         check_models(spec, base_dir),
         check_design(spec),
+        check_measurement_plan(spec),
         check_operating_limits(spec),
     ]
 
@@ -1333,7 +1374,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--erc", action="store_true",
                         help="also run KiCad ERC when kicad-cli is compatible")
     parser.add_argument("--require", metavar="STAGES",
-                        help="comma-separated stages that must PASS: design, limits, models, simulate, erc, kicad-parse")
+                        help="comma-separated stages that must PASS: design, limits, measurements, models, simulate, erc, kicad-parse")
     ns = parser.parse_args(argv)
     required = [s.strip() for s in (ns.require or "").split(",") if s.strip()]
     unknown = [s for s in required if s not in REQUIRED_CHECK]
