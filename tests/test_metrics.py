@@ -67,6 +67,45 @@ class TestMetrics(unittest.TestCase):
         expected = fc / math.sqrt(10.0 ** 0.3 - 1.0)
         self.assertAlmostEqual(results[0].value, expected, delta=1.0)
 
+    def test_bandwidth_uses_dominant_passband_not_outermost_bands(self):
+        frequencies = [1.0, 10.0, 100.0, 1000.0, 10000.0,
+                       100000.0, 1e6, 1e7, 1e8]
+        gains = [0.1, 0.5, 1.0, 0.5, 0.1, 0.2, 0.8, 0.2, 0.1]
+        plots = {"AC Analysis": ac_plot(gains, frequencies)}
+        results, errors = evaluate(
+            {"metrics": [{"measure": "bandwidth_width_hz",
+                          "output": "v(out)", "input": "v(in)"}]},
+            plots, "")
+        self.assertFalse(errors)
+        self.assertTrue(10.0 < results[0].value < 1000.0)
+        self.assertIn("dominant passband", results[0].detail)
+        self.assertIn("100 Hz", results[0].detail)
+
+    def test_bandwidth_ripple_does_not_jump_to_a_later_passband(self):
+        frequencies = [1.0, 10.0, 100.0, 1000.0, 10000.0,
+                       100000.0, 1e6]
+        # A deep ripple notch separates the dominant peak from a smaller
+        # secondary passband. The upper corner must be the first crossing.
+        gains = [0.1, 0.5, 1.0, 0.1, 0.8, 0.2, 0.1]
+        plots = {"AC Analysis": ac_plot(gains, frequencies)}
+        results, errors = evaluate(
+            {"metrics": [{"measure": "bandwidth_hz",
+                          "output": "v(out)", "input": "v(in)"}]},
+            plots, "")
+        self.assertFalse(errors)
+        self.assertGreater(results[0].value, 100.0)
+        self.assertLess(results[0].value, 10000.0)
+        self.assertIn("dominant peak 100 Hz", results[0].detail)
+
+    def test_bandwidth_rejects_unsorted_frequency_axis(self):
+        plots = {"AC Analysis": ac_plot([0.1, 1.0, 0.1], [10.0, 100.0, 50.0])}
+        _, errors = evaluate(
+            {"metrics": [{"measure": "bandwidth_hz",
+                          "output": "v(out)", "input": "v(in)"}]},
+            plots, "")
+        self.assertTrue(errors)
+        self.assertIn("strictly ascending", errors[0])
+
     def test_bandwidth_needs_a_corner(self):
         plots = {"AC Analysis": ac_plot([1.0, 0.99, 0.98], [10.0, 100.0, 1000.0])}
         _, errors = evaluate(
