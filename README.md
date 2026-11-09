@@ -192,6 +192,26 @@ Outputs in `out/`:
 | `rc_lowpass-node-aliases.json` | SPICE node -> PCB net aliases |
 | `rc_lowpass-pcb-handoff.md` | Exact PCB-skill command and gaps |
 
+## Design optimization
+
+The first automated optimizer targets first-order RC low-pass filters. It
+searches discrete E24 resistor and E12 capacitor values, enumerates exact
+independent tolerance corners, ranks candidates by worst-case cutoff error,
+and writes a revised design spec:
+
+```bash
+python3 scripts/optimize.py examples/rc-lowpass.json --target-fc 1.59k \\
+  --r-min 1k --r-max 100k --c-min 10n --c-max 1u \\
+  --r-tol 1 --c-tol 10 --max-error-percent 5 \\
+  --out-spec out/rc-optimized.json --require-feasible
+python3 scripts/verify.py out/rc-optimized.json --out out/optimized/ --require simulate
+```
+
+It currently assumes an ideal source and unloaded output. The generated spec
+must still be simulated with real source/load conditions and checked against
+component datasheets. This is a first bounded optimizer, not yet a universal
+circuit optimizer. See `references/optimization.md`.
+
 ## Calculators
 
 ```bash
