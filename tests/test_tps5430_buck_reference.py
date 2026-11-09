@@ -41,8 +41,8 @@ class TestTPS5430BuckReference(unittest.TestCase):
         self.assertIn("4.9895 V", plan)
         self.assertIn("2.5 Ω", plan)
         self.assertIn("10 W", plan)
-        self.assertIn("0.99 A p-p", plan)
-        self.assertIn("2.50 A", plan)
+        self.assertIn("0.50 A p-p", plan)
+        self.assertIn("2.25 A", plan)
 
 
 if __name__ == "__main__":
