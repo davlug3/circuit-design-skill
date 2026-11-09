@@ -9,8 +9,8 @@ Supported measures:
 ``gain_db``
     AC gain at one frequency, ``20 log10(|Vout| / |Vin|)``.
 ``bandwidth_hz`` / ``bandwidth_low_hz`` / ``bandwidth_width_hz``
-    Upper and lower -3 dB corners relative to the maximum AC gain, and their
-    difference.
+    -3 dB corners around the dominant passband peak, and their difference.
+    For multi-band responses, the dominant (highest-gain) passband is selected.
 ``thd_percent``
     Total harmonic distortion reported by ngspice's ``.four`` analysis.
 ``ein_uv`` / ``noise_uv``
@@ -147,36 +147,55 @@ def _bandwidth(metric: dict[str, Any], plots: dict[str, Plot],
     if plot is None:
         raise ValueError("no AC analysis plot; add an 'ac' analysis")
     xs, gains = _gain_curve(plot, metric)
-    finite = [gain for gain in gains if math.isfinite(gain)]
-    if not finite:
+    if len(xs) != len(gains) or len(xs) < 2:
+        raise ValueError("AC sweep has too few points")
+    if any(not math.isfinite(x) or x <= 0 for x in xs):
+        raise ValueError("AC sweep frequencies must be finite and positive")
+    if any(xs[i] >= xs[i + 1] for i in range(len(xs) - 1)):
+        raise ValueError("AC sweep frequency axis must be strictly ascending")
+    finite_indices = [i for i, gain in enumerate(gains) if math.isfinite(gain)]
+    if not finite_indices:
         raise ValueError("AC gain is not finite at any point")
-    threshold = max(finite) - 3.0
-    upper: float | None = None
+
+    peak_index = max(finite_indices, key=lambda i: gains[i])
+    peak_gain = gains[peak_index]
+    threshold = peak_gain - 3.0
+
+    # Find the nearest -3 dB crossing on each side of the dominant peak.
+    # Taking the first/last crossing across the entire sweep can incorrectly
+    # combine separate passbands into one enormous bandwidth.
     lower: float | None = None
-    for index in range(len(xs) - 1):
+    for index in range(peak_index - 1, -1, -1):
+        if gains[index] < threshold <= gains[index + 1]:
+            lower = _interpolate_corner(
+                xs[index], gains[index], xs[index + 1], gains[index + 1],
+                threshold)
+            break
+
+    upper: float | None = None
+    for index in range(peak_index, len(xs) - 1):
         if gains[index] >= threshold > gains[index + 1]:
             upper = _interpolate_corner(
                 xs[index], gains[index], xs[index + 1], gains[index + 1],
                 threshold)
-    for index in range(1, len(xs)):
-        if gains[index - 1] < threshold <= gains[index]:
-            lower = _interpolate_corner(
-                xs[index - 1], gains[index - 1], xs[index], gains[index],
-                threshold)
+            break
+
+    peak_detail = f"dominant peak {xs[peak_index]:.6g} Hz at {peak_gain:.3f} dB"
     if mode == "upper":
         if upper is None:
             raise ValueError(
-                "AC sweep does not fall below the -3 dB upper corner; extend stop")
-        return upper, "Hz", f"-3 dB relative to {max(finite):.3f} dB"
+                "dominant passband has no -3 dB upper corner; extend stop")
+        return upper, "Hz", f"-3 dB; {peak_detail}"
     if mode == "lower":
         if lower is None:
             raise ValueError(
-                "AC sweep does not rise above the -3 dB lower corner; extend start")
-        return lower, "Hz", f"-3 dB relative to {max(finite):.3f} dB"
-    if upper is None or lower is None:
-        raise ValueError("AC sweep does not contain both -3 dB corners")
+                "dominant passband has no -3 dB lower corner; extend start")
+        return lower, "Hz", f"-3 dB; {peak_detail}"
+    if lower is None or upper is None:
+        raise ValueError(
+            "dominant passband does not contain both -3 dB corners")
     return upper - lower, "Hz", (
-        f"upper {upper:.6g} Hz minus lower {lower:.6g} Hz")
+        f"dominant passband {lower:.6g}..{upper:.6g} Hz; {peak_detail}")
 
 
 def _thd(metric: dict[str, Any], log_text: str) -> tuple[float, str, str]:
