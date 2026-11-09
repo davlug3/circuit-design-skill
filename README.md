@@ -344,6 +344,36 @@ python3 scripts/verify.py examples/rc-lowpass-metrics.json --out out/ \
 Without ngspice the metrics check is a `SKIP`; `--require simulate` makes that
 a failure. Read `references/metrics.md` for definitions, conditions and limits.
 
+## Graphical interaction
+
+The optional `scripts/design_interact.py` command provides guided design intake
+and artifact review. Its UI implementation is maintained separately; this
+repository does not vendor it. The wrapper uses this sibling checkout layout:
+
+```text
+<workspace>/
+├── _shared/
+│   └── design-interact/
+│       └── scripts/
+│           └── design_interact.py
+└── circuit-design-skill/
+    └── scripts/
+        └── design_interact.py
+```
+
+Clone the shared UI repository into `<workspace>/_shared/design-interact`.
+Then run the wrapper from this repository:
+
+```bash
+python3 scripts/design_interact.py intake --out out/intake.json
+python3 scripts/design_interact.py review-artifacts \
+  --spec specs/rc.json --out-dir out/ --out out/review.json
+```
+
+The core circuit-generation and verification workflows do not depend on this
+optional UI. Without the sibling checkout, the wrapper exits with an actionable
+installation message (exit status 2); `--help` remains available.
+
 ## Tests
 
 ```bash
