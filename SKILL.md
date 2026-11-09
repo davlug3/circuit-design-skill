@@ -1,6 +1,6 @@
 ---
 name: circuit-design-skill
-description: Design analog, digital, mixed-signal and power circuits from requirements to verified files. Use when planning a design, comparing architectures, choosing parts, sizing components, checking op-amp/filter/converter/transistor behaviour, finding and ingesting real SPICE models, producing an LTspice .asc/.cir, a SPICE netlist, or KiCad .kicad_sch/.net files, or verifying that a schematic and netlist agree. Includes intake questions, a planning and evidence workflow, part-selection decision records, open-web research guidance, closed-form calculators, discrete E-series optimization for RC low-pass designs, a pure-Python MNA solver, model provenance, and evidence-based verification.
+description: Act as an evidence-led electronics design engineer for analog, digital, mixed-signal and power circuits. Translate requirements into scientifically justified architectures, calculations, real-part selections and verified deliverables. Produce SPICE netlists, LTspice schematics, KiCad schematics/netlists, and rendered schematic images (SVG); explain assumptions, cite datasheets/standards, analyze operating limits, simulate, and distinguish structural checks, model-based predictions and physical measurements. Use for circuit architecture, component sizing, design review, SPICE/KiCad/LTspice generation, image export, and verification.
 license: MIT
 ---
 
@@ -10,9 +10,7 @@ Design a circuit the way an engineer does: establish the requirements, choose
 a topology, calculate the values, draw it, simulate it, and state what was and
 was not verified.
 
-**The generated SPICE netlist is the electrical source of truth.** The LTspice
-and KiCad drawings are generated from the same component list, so they cannot
-silently disagree with it.
+**The normalized circuit specification is the design contract; the generated SPICE netlist is the simulation source of truth.** LTspice and KiCad artifacts are generated from the same component connectivity. A rendered SVG is a view of the KiCad schematic, never an independent electrical source of truth.
 
 Treat the model's internal knowledge of electronics and physics as a source of
 hypotheses, not as evidence. Before a number reaches the schematic, trace it to
@@ -64,10 +62,27 @@ a datasheet, an application note, a standard, or a measurement.
     `scripts/env_probe.py` before trusting a stage. If the local machine cannot
     run it, verify on CI and record the backend; never report a local `SKIP` as
     a local `PASS` because CI passed.
-12. **Audio targets come from the audio skill.** For audio and sound work,
+12. **Images must preserve engineering truth.** Render images from the
+    editable KiCad schematic using the official KiCad CLI. Do not use an image
+    generation model to redraw circuit connectivity. Prefer SVG; label it as
+    a schematic rendering, not a PCB layout or proof of operation.
+13. **Audio targets come from the audio skill.** For audio and sound work,
     requirements, perceptual limits and measurement conditions come from
     `audio-engineering-skill`, not from this skill's memory. This skill owns
     the implementation and verification. See `references/audio-handoff.md`.
+
+## Schematic image export
+
+After generating a KiCad schematic, render it with KiCad 9+:
+
+```bash
+python3 scripts/render_schematic.py out/design.kicad_sch --out out/images/
+```
+
+The renderer invokes `kicad-cli sch export svg`, verifies that SVG files were
+created and parses each output as XML. The SVG is a visual representation of
+the editable KiCad schematic; it is not a PCB layout, an independent
+connectivity source, or evidence that the circuit operates.
 
 ## Workflow
 
