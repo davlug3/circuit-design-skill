@@ -13,6 +13,21 @@ The contract is:
 - logical SPICE pin numbers are **not** physical footprint pads;
 - the PCB skill's DRC/DFM/unconnected gates decide manufacturability.
 
+## Contract version 1
+
+The overlay carries `"version": 1`, and the PCB skill rejects any other value.
+That field is the circuit-to-PCB handoff contract; the four artifacts and the
+authority split above are part of it.
+
+- Additive optional fields keep version 1.
+- Renaming or removing a field, changing units, or changing a field's meaning
+  requires a version bump in both repositories.
+- The consumer fails on an unknown version instead of guessing.
+
+The audio skill is not part of this contract. Audio targets stay in the audio
+handoff and reach the board only as electrical requirements in the circuit
+spec; the PCB overlay carries no audio claims.
+
 ## Files
 
 When `"pcb"` is in `deliverables`, `--pcb-board` is passed, or

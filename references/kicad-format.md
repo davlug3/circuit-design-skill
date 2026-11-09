@@ -128,8 +128,9 @@ python3 scripts/pcb_handoff.py specs/board.json --out out/ --board 50x40
 The handoff writes the PCB overlay, pin map and node aliases. It never guesses
 a footprint or a package pinout; missing ones are left for the PCB skill's
 visual picker. An op-amp drawn as `U1` is a SPICE subcircuit element `XU1`; the
-handoff maps the reference and records the mapping. See
-`references/pcb-handoff.md`.
+handoff maps the reference and records the mapping. The overlay's
+`"version": 1` is the handoff contract; see
+[`pcb-handoff.md`](pcb-handoff.md#contract-version-1) for the versioning rules.
 
 ## Connectivity by global labels
 
