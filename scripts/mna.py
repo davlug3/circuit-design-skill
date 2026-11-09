@@ -231,17 +231,57 @@ class Circuit:
 
     @staticmethod
     def _solve_linear(A: list[list[complex]], z: list[complex]) -> list[complex]:
+        """Solve an MNA system after row/column equilibration.
+
+        MNA matrices mix conductances, ideal-source constraints, and controlled
+        source gains, so a fixed absolute pivot threshold is not meaningful.
+        Equilibrating rows and columns makes the singularity test relative to
+        the matrix scale while preserving the original solution.
+        """
         n = len(A)
         if n == 0:
             return []
-        # Augmented matrix, partial pivoting.
-        M = [row[:] + [z[i]] for i, row in enumerate(A)]
+        if len(z) != n or any(len(row) != n for row in A):
+            raise MNAError("linear system must have a square matrix and matching RHS")
+
+        # Scale each equation by its largest coefficient.
+        row_scale = [max(abs(value) for value in row) for row in A]
+        if any(scale == 0 for scale in row_scale):
+            raise MNAError(
+                "singular matrix: check for floating nodes, a missing ground "
+                "reference, or two ideal voltage sources in parallel"
+            )
+        scaled = [
+            [value / row_scale[i] for value in A[i]]
+            for i in range(n)
+        ]
+        rhs = [z[i] / row_scale[i] for i in range(n)]
+
+        # Scale unknowns as well; y[j] = column_scale[j] * x[j].
+        column_scale = [
+            max(abs(scaled[i][j]) for i in range(n))
+            for j in range(n)
+        ]
+        if any(scale == 0 for scale in column_scale):
+            raise MNAError(
+                "singular matrix: check for floating nodes, a missing ground "
+                "reference, or two ideal voltage sources in parallel"
+            )
+        M = [
+            [scaled[i][j] / column_scale[j] for j in range(n)] + [rhs[i]]
+            for i in range(n)
+        ]
+
+        # Partial pivoting on the equilibrated matrix. This relative threshold
+        # detects numerical singularity without rejecting small SI-valued
+        # conductances merely because their absolute magnitude is below 1e-18.
+        pivot_tolerance = 1e-14
         for col in range(n):
             pivot = max(range(col, n), key=lambda r: abs(M[r][col]))
-            if abs(M[pivot][col]) < 1e-18:
+            if abs(M[pivot][col]) <= pivot_tolerance:
                 raise MNAError(
-                    "singular matrix: check for floating nodes, a missing ground "
-                    "reference, or two ideal voltage sources in parallel"
+                    "singular or ill-conditioned matrix after scaling: check "
+                    "for floating nodes, missing ground, or conflicting ideal sources"
                 )
             if pivot != col:
                 M[col], M[pivot] = M[pivot], M[col]
@@ -250,14 +290,29 @@ class Circuit:
                 factor = M[r][col] / pv
                 if factor == 0:
                     continue
-                for c in range(col, n + 1):
+                M[r][col] = 0j
+                for c in range(col + 1, n + 1):
                     M[r][c] -= factor * M[col][c]
-        x = [0j] * n
+
+        y = [0j] * n
         for row in range(n - 1, -1, -1):
             total = M[row][n]
             for c in range(row + 1, n):
-                total -= M[row][c] * x[c]
-            x[row] = total / M[row][row]
+                total -= M[row][c] * y[c]
+            y[row] = total / M[row][row]
+
+        x = [y[j] / column_scale[j] for j in range(n)]
+
+        # Check the solution against the unscaled system. The row-wise
+        # backward error is unit-independent and catches unstable solves.
+        for i in range(n):
+            residual = sum(A[i][j] * x[j] for j in range(n)) - z[i]
+            scale = abs(z[i]) + sum(abs(A[i][j]) * abs(x[j]) for j in range(n))
+            if abs(residual) > 1e-10 * max(scale, 1e-300):
+                raise MNAError(
+                    "numerically unstable solution: scaled linear solve failed "
+                    "the normalized residual check"
+                )
         return x
 
     def _solution_to_nodes(
