@@ -281,6 +281,26 @@
               "note": {"type": "string"}
             }
           }
+        },
+        "operating_limits": {
+          "type": "array",
+          "description": "Calculated worst-case stresses checked against sourced component datasheet operating limits. --require limits makes this gate mandatory.",
+          "items": {
+            "type": "object",
+            "required": ["id", "parameter", "value", "unit", "condition", "source"],
+            "anyOf": [{"required": ["min"]}, {"required": ["max"]}],
+            "properties": {
+              "id": {"type": "string"},
+              "parameter": {"type": "string"},
+              "value": {"type": "number"},
+              "unit": {"type": "string"},
+              "min": {"type": "number"},
+              "max": {"type": "number"},
+              "condition": {"type": "string"},
+              "source": {"type": "string"},
+              "note": {"type": "string"}
+            }
+          }
         }
       }
     },
