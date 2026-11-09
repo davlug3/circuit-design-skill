@@ -339,3 +339,27 @@ k = 0.048 external, 0.024 internal
 
 This is a thermal sizing rule, not an impedance or voltage-drop rule. For
 high-current or low-voltage rails, also check `I*R` drop and connector rating.
+
+
+## Inverting op-amp amplifier
+
+For an ideal inverting amplifier:
+
+- Signal input connects to the inverting node through (R_{in}).
+- Feedback resistor (R_f) connects output to the inverting node.
+- Non-inverting input is referenced to ground (or the intended bias reference).
+- Closed-loop gain is (A_v=-R_f/R_{in}).
+
+Scaffold:
+
+```bash
+python3 scripts/design_spec.py scaffold --topology opamp_inverting \
+  --param gain=10 --param rin=10k --out specs/inverting.json
+```
+
+The `gain` parameter is the magnitude; the circuit polarity is inverting. The
+scaffold adds explicit positive/negative supply rails and an optional output
+load. Check input common-mode range, output swing, GBW, slew rate, input bias
+current, offset, noise, resistor noise and output current against the selected
+op-amp datasheet. The idealized gain check does not validate those nonideal
+limits.

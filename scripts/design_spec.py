@@ -1525,6 +1525,32 @@ def scaffold(topology: str, params: dict[str, Any], name: str | None = None) -> 
                      [{"type": "op"}, {"type": "ac", "start": 1e3, "stop": 1e8, "points": 100}],
                      supplies=[{"name": "VDD", "voltage": vdd}])
 
+    if topo in ("opamp_inverting", "inverting"):
+        gain = abs(_require(params, "gain"))
+        rin = _require(params, "rin")
+        rf = gain * rin
+        vcc = float(_param(params, "vcc", 5.0) or 5.0)
+        vee = float(_param(params, "vee", -5.0) if params.get("vee") is not None else -5.0)
+        rload = _param(params, "rload")
+        comps = [
+            {"ref": "V1", "type": "V", "value": 0.0, "dc": 0.0, "ac": 1.0,
+             "pins": {"1": "IN", "2": "GND"}},
+            {"ref": "RIN1", "type": "R", "value": rin, "pins": {"1": "IN", "2": "N"}},
+            {"ref": "RF1", "type": "R", "value": rf, "pins": {"1": "OUT", "2": "N"}},
+            {"ref": "U1", "type": "OPAMP", "value": 1e6,
+             "pins": {"1": "GND", "2": "N", "3": "VCC", "4": "VEE", "5": "OUT"}},
+            {"ref": "V2", "type": "V", "value": 0.0, "dc": vcc,
+             "pins": {"1": "VCC", "2": "GND"}},
+            {"ref": "V3", "type": "V", "value": 0.0, "dc": vee,
+             "pins": {"1": "VEE", "2": "GND"}},
+        ]
+        if rload is not None:
+            comps.append({"ref": "RL1", "type": "R", "value": rload,
+                          "pins": {"1": "OUT", "2": "GND"}})
+        return _base(name, topo, "Inverting op-amp amplifier", params, comps,
+                     [{"type": "op"}, {"type": "ac", "start": 10.0, "stop": 1e6, "points": 200}],
+                     supplies=[{"name": "VCC", "voltage": vcc}, {"name": "VEE", "voltage": vee}])
+
     if topo in ("opamp_noninverting", "noninverting"):
         gain = _require(params, "gain")
         rg = float(_param(params, "rg", 10e3) or 10e3)
@@ -1592,7 +1618,7 @@ def scaffold(topology: str, params: dict[str, Any], name: str | None = None) -> 
 
     raise ValueError(
         f"no scaffold for topology {topology!r}; supply an explicit component list. "
-        f"Scaffolds: rc_lowpass, rc_highpass, divider, sallen_key_lp, sallen_key_hp, "
+        f"Scaffolds: rc_lowpass, rc_highpass, divider, sallen_key_lp, sallen_key_hp, opamp_inverting, "
         f"bjt_ce, led, i2c, opamp_noninverting, zener_regulator, buck"
     )
 

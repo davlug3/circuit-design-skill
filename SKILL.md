@@ -123,7 +123,7 @@ python3 scripts/design_spec.py scaffold --topology rc_lowpass \
 ```
 
 Supported scaffolds: `rc_lowpass`, `rc_highpass`, `divider`, `sallen_key_lp`,
-`sallen_key_hp`, `bjt_ce`, `led`, `i2c`, `opamp_noninverting`,
+`sallen_key_hp`, `bjt_ce`, `led`, `i2c`, `opamp_noninverting`, `opamp_inverting`,
 `zener_regulator`, `buck`.
 
 ### 2. Spec

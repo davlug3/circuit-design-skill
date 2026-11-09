@@ -570,20 +570,22 @@ def check_mna(spec: dict[str, Any]) -> list[Check]:
                     {"actual_Hz": actual, "target_Hz": target},
                 ))
 
-    # Non-inverting op-amp gain
-    if topology in ("opamp_noninverting", "noninverting"):
+    # Closed-loop op-amp gain checks for supported idealized topologies.
+    if topology in ("opamp_noninverting", "noninverting", "opamp_inverting", "inverting"):
         rf = next((c for c in spec["components"] if c["ref"].upper().startswith("RF")), None)
-        rg = next((c for c in spec["components"] if c["ref"].upper().startswith("RG")), None)
+        feedback = next((c for c in spec["components"] if c["ref"].upper().startswith(("RG", "RIN"))), None)
         out = next((c["pins"]["5"] for c in spec["components"] if c["type"] == "OPAMP"), None)
         inp = _source_node(spec)
-        if rf and rg and out and inp:
-            expected = 1 + float(rf["value"]) / float(rg["value"])
+        if rf and feedback and out and inp:
+            ratio = float(rf["value"]) / float(feedback["value"])
+            expected = 1 + ratio if topology in ("opamp_noninverting", "noninverting") else ratio
             actual = abs(circuit.ac_gain(out, inp, 10.0))
             ok = abs(actual - expected) / expected < 0.01
+            formula = "1+Rf/Rg" if topology in ("opamp_noninverting", "noninverting") else "Rf/Rin"
             checks.append(Check(
                 "opamp_gain", ok,
-                f"|gain(10 Hz)| = {actual:.6g}, expected 1+Rf/Rg = {expected:.6g}",
-                {"actual": actual, "expected": expected},
+                f"|gain(10 Hz)| = {actual:.6g}, expected |gain|={formula}={expected:.6g}",
+                {"actual": actual, "expected": expected, "topology": topology},
             ))
 
     # Generic AC sanity: no singular solve, finite response.
