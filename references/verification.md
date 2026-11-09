@@ -90,7 +90,7 @@ python3 scripts/verify.py specs/rc.json --out out/ --json
     --exit-code-violations`. Exit code 5 means error-level violations and is a
     failure; any other non-zero code is a tool error, not a clean pass. The
     report is written next to the output as `<name>-erc.rpt`.
-12. **Required stages** — `--require simulate,erc,kicad-parse,models,design`
+12. **Required stages** — `--require simulate,erc,kicad-parse,models,design,limits`
     converts a `SKIP` in a required stage into a failure. This is what CI uses
     so a missing tool, a generic transistor, or an unrecorded decision cannot
     masquerade as a pass.
