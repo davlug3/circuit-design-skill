@@ -153,6 +153,17 @@ jobs:
           python scripts/verify.py "$SPEC" --out out --json \
             --require "$REQUIRE" $ERC | tee verification.json
 
+      - name: Render schematic image
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          schematics=(out/*.kicad_sch)
+          if (( ${#schematics[@]} )); then
+            python scripts/render_schematic.py "${schematics[0]}" --out out/images
+          else
+            echo "No KiCad schematic requested by this spec; image export skipped."
+          fi
+
       - name: Verify gain and bandwidth metrics
         env:
           CIRCUIT_BACKEND: ci
@@ -169,6 +180,7 @@ jobs:
           name: circuit-verification
           path: |
             out/
+            out/images/
             out-metrics/
             verification.json
             metrics-verification.json
