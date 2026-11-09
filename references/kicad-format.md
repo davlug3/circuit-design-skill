@@ -226,3 +226,14 @@ as passing. A structural pass is not a KiCad ERC or a DRC.
   <https://dev-docs.kicad.org/en/import-formats/ltspice/index.html>
 - `kiutils` Python library (used only for validation):
   <https://github.com/mvnmgrx/kiutils>
+
+
+## Generated schematic placement
+
+The design spec may give a component an optional `placement` object with
+`x_mm` and `y_mm` coordinates. These are KiCad schematic coordinates, not
+PCB coordinates. Values must be positive, unique, and aligned to the 1.27 mm
+grid. This lets an agent arrange functional blocks while preserving the
+existing embedded symbol geometry and pin-to-net verification. Components
+without explicit coordinates use the automatic grid. LTspice layout remains
+independent.

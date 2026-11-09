@@ -259,10 +259,14 @@ Without `--formats`, the spec's `deliverables` list is used. Outputs:
 | `<name>-node-aliases.json` | SPICE node -> PCB net aliases |
 | `<name>-pcb-handoff.md` | Exact PCB-skill command and remaining gaps |
 
-The `.asc` and `.kicad_sch` are laid out on a grid, one component per cell,
-with a net label at every pin. This is intentional: it avoids fragile
-autorouting and makes the connectivity exact. Clean up the presentation in
-LTspice or KiCad if you need a publication-quality drawing.
+The `.asc` uses a deterministic grid layout. KiCad also supports explicit
+`placement: {x_mm, y_mm}` overrides per component, aligned to its 1.27 mm
+grid; these overrides affect the KiCad drawing only. The `.kicad_sch` default
+layout places one component per cell, with a net label at every pin. This is
+intentional: it avoids fragile autorouting and makes the connectivity exact.
+Use placement overrides to organize the KiCad drawing into functional blocks;
+the LTspice `.asc` retains its own deterministic grid. Clean up the presentation
+in LTspice or KiCad if you need a publication-quality drawing.
 
 ### 6. PCB handoff
 
