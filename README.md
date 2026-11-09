@@ -189,7 +189,6 @@ Outputs in `out/`:
 | `rc_lowpass.asc` | LTspice schematic |
 | `rc_lowpass.net` | KiCad netlist |
 | `rc_lowpass.kicad_sch` | KiCad 9 schematic |
-| `rc_lowpass.svg` | SVG rendering of the KiCad schematic (when KiCad CLI is available) |
 | `rc_lowpass-bom.csv` | Bill of materials |
 | `rc_lowpass-report.md` / `.json` | Design report |
 | `rc_lowpass-verification.json` | Verification evidence |
