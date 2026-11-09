@@ -1,13 +1,15 @@
 # circuit-design-skill
 
-Design analog, digital, mixed-signal and power circuits from requirements to
-verified files, with every calculation in Python. Plan the architecture, choose
-parts with evidence, generate a SPICE netlist, an LTspice schematic, a KiCad 9
-schematic and netlist, a BOM and a verification report.
+An evidence-led electronics design agent for analog, digital, mixed-signal and
+power circuits. It turns requirements into a justified architecture, sourced
+component choices, reproducible calculations, SPICE/LTspice/KiCad deliverables,
+rendered schematic images (SVG), and verification evidence. It must explain
+assumptions and operating limits rather than merely generate files.
 
-The generated SPICE netlist is the electrical source of truth. The LTspice and
-KiCad drawings are generated from the same component list, so the picture and
-the netlist cannot silently disagree.
+The normalized circuit specification is the design contract; the generated
+SPICE netlist is the simulation source of truth. LTspice and KiCad artifacts
+share the same connectivity. SVG images are rendered from the KiCad schematic,
+not independently redrawn, so the image remains traceable to the editable file.
 
 ## Why this exists
 
@@ -183,7 +185,8 @@ Outputs in `out/`:
 | `rc_lowpass.models` | Model cards for the LTspice include |
 | `rc_lowpass.asc` | LTspice schematic |
 | `rc_lowpass.net` | KiCad netlist |
-| `rc_lowpass.kicad_sch` | KiCad 9 schematic |
+| `rc_lowpass.kicad_sch` | KiCad 9 editable schematic |
+| `images/rc_lowpass.svg` | Rendered schematic image (exported with KiCad CLI) |
 | `rc_lowpass-bom.csv` | Bill of materials |
 | `rc_lowpass-report.md` / `.json` | Design report |
 | `rc_lowpass-verification.json` | Verification evidence |
@@ -191,6 +194,20 @@ Outputs in `out/`:
 | `rc_lowpass-pinmap.json` | SPICE pin -> footprint pad map |
 | `rc_lowpass-node-aliases.json` | SPICE node -> PCB net aliases |
 | `rc_lowpass-pcb-handoff.md` | Exact PCB-skill command and gaps |
+
+## Schematic images
+
+The image deliverable is a faithful rendering of the editable KiCad schematic,
+not a generated illustration or PCB image. Export it with KiCad 9+:
+
+```bash
+python3 scripts/render_schematic.py out/rc_lowpass.kicad_sch --out out/images/
+```
+
+The renderer calls `kicad-cli sch export svg`, checks that at least one SVG
+was produced, and parses each SVG before reporting success. SVG is preferred
+for readable labels at any zoom. If KiCad CLI is unavailable, the renderer
+fails with an actionable message; it never substitutes a fabricated image.
 
 ## Calculators
 
