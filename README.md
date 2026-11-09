@@ -199,11 +199,17 @@ python3 scripts/circuit_calc.py list
 python3 scripts/circuit_calc.py divider --vin 12 --r1 10k --r2 4k7 --json
 python3 scripts/circuit_calc.py buck --vin 12 --vout 5 --iout 2 --fsw 500k
 python3 scripts/circuit_calc.py sallen-key --topology highpass --fc 1k --q 0.7071
+
+# Enumerate exact worst-case RC cutoff corners
+python3 scripts/circuit_calc.py tolerance --mode rc_fc \\
+  --components '{"r":{"value":1000,"tol":1},"c":{"value":1e-7,"tol":10}}' --json
 ```
 
 26 commands across passives, analog, devices, power and digital/interface.
 Every command returns the same JSON envelope with formulas, assumptions,
-warnings and notes.
+warnings and notes. The tolerance command evaluates all independent min/max
+corners (up to 16 variables), and reports exact range/corner assignments plus
+separate linearized sensitivity and RSS estimates.
 
 ## Design intake
 
@@ -225,6 +231,16 @@ not hide assumptions in the netlist.
 
 `verify.py` reports `PASS`, `FAIL` or `SKIP`. A skipped check is never a pass.
 Generic models are labelled "unverified" in the report.
+
+## Worst-case operating limits
+
+Add calculated stresses and sourced datasheet limits to `design.operating_limits`.
+Each record includes the calculation condition and source revision/URL; for
+example, junction temperature against the datasheet maximum, MOSFET VDS against
+its rating, or resistor power against its derated limit. The verifier checks
+the supplied stress against the stated bounds. It does not independently derive
+the stress, validate the source document, or replace a thermal/electrical
+calculation. Use `--require limits` to make missing or out-of-range records fail.
 
 ## Topologies with scaffolds
 
