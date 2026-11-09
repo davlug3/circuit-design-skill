@@ -1,13 +1,15 @@
 # circuit-design-skill
 
-Design analog, digital, mixed-signal and power circuits from requirements to
-verified files, with every calculation in Python. Plan the architecture, choose
-parts with evidence, generate a SPICE netlist, an LTspice schematic, a KiCad 9
-schematic and netlist, a BOM and a verification report.
+An evidence-led electronics design agent for analog, digital, mixed-signal and
+power circuits. It turns requirements into a justified architecture, sourced
+component choices, reproducible calculations, SPICE/LTspice/KiCad deliverables,
+rendered schematic images (SVG), and verification evidence. It must explain
+assumptions and operating limits rather than merely generate files.
 
-The generated SPICE netlist is the electrical source of truth. The LTspice and
-KiCad drawings are generated from the same component list, so the picture and
-the netlist cannot silently disagree.
+The normalized circuit specification is the design contract; the generated
+SPICE netlist is the simulation source of truth. LTspice and KiCad artifacts
+share the same connectivity. SVG images are rendered from the KiCad schematic,
+not independently redrawn, so the image remains traceable to the editable file.
 
 ## Why this exists
 
@@ -171,6 +173,9 @@ python3 scripts/generate.py specs/rc.json --out out/
 # 4. Verify it
 python3 scripts/verify.py specs/rc.json --out out/
 
+# 4a. Render the KiCad schematic to SVG (requires KiCad CLI 9+)
+python3 scripts/render_schematic.py out/rc_lowpass.kicad_sch --out out/images/
+
 # 5. Optional PCB handoff for pcb-design-skill
 python3 scripts/generate.py specs/rc.json --out out/ --pcb-board 50x40
 ```
@@ -184,9 +189,11 @@ Outputs in `out/`:
 | `rc_lowpass.asc` | LTspice schematic |
 | `rc_lowpass.net` | KiCad netlist |
 | `rc_lowpass.kicad_sch` | KiCad 9 schematic |
+| `rc_lowpass.svg` | SVG rendering of the KiCad schematic (when KiCad CLI is available) |
 | `rc_lowpass-bom.csv` | Bill of materials |
 | `rc_lowpass-report.md` / `.json` | Design report |
 | `rc_lowpass-verification.json` | Verification evidence |
+| `images/rc_lowpass.svg` | Rendered schematic image; not a PCB layout or proof of operation |
 | `rc_lowpass-pcb.json` | PCB overlay (when `pcb` or `--pcb-board` is requested) |
 | `rc_lowpass-pinmap.json` | SPICE pin -> footprint pad map |
 | `rc_lowpass-node-aliases.json` | SPICE node -> PCB net aliases |
