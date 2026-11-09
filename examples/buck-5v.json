@@ -4,115 +4,19 @@
   "description": "Buck converter power stage, 12 V to 5 V at 2 A",
   "topology": "buck",
   "ground": "GND",
-  "supplies": [
-    {
-      "name": "VIN",
-      "voltage": 12.0
-    }
-  ],
-  "parameters": {
-    "vin": 12.0,
-    "vout": 5.0,
-    "iout": 2.0,
-    "fsw": 500000.0
-  },
+  "supplies": [{"name": "VIN", "voltage": 12.0}],
+  "parameters": {"vin": 12.0, "vout": 5.0, "iout": 2.0, "fsw": 500000.0},
   "components": [
-    {
-      "ref": "V1",
-      "type": "V",
-      "value": 0.0,
-      "pins": {
-        "1": "VIN",
-        "2": "GND"
-      },
-      "dc": 12.0
-    },
-    {
-      "ref": "S1",
-      "type": "SW",
-      "value": 0.0,
-      "pins": {
-        "1": "VIN",
-        "2": "SW",
-        "3": "PWM",
-        "4": "GND"
-      },
-      "model": "SWMOD"
-    },
-    {
-      "ref": "D1",
-      "type": "D",
-      "value": 0.0,
-      "pins": {
-        "1": "GND",
-        "2": "SW"
-      },
-      "model": "DGEN"
-    },
-    {
-      "ref": "L1",
-      "type": "L",
-      "value": 9.722222222222223e-06,
-      "pins": {
-        "1": "SW",
-        "2": "OUT"
-      }
-    },
-    {
-      "ref": "C1",
-      "type": "C",
-      "value": 1.4999999999999999e-05,
-      "pins": {
-        "1": "OUT",
-        "2": "GND"
-      }
-    },
-    {
-      "ref": "RL1",
-      "type": "R",
-      "value": 2.5,
-      "pins": {
-        "1": "OUT",
-        "2": "GND"
-      }
-    },
-    {
-      "ref": "V2",
-      "type": "V",
-      "value": 0.0,
-      "pins": {
-        "1": "PWM",
-        "2": "GND"
-      },
-      "waveform": {
-        "type": "pulse",
-        "params": [
-          0.0,
-          5.0,
-          0.0,
-          1e-09,
-          1e-09,
-          8.333333333333333e-07,
-          2e-06
-        ]
-      }
-    }
+    {"ref":"V1","type":"V","value":0.0,"pins":{"1":"VIN","2":"GND"},"dc":12.0},
+    {"ref":"S1","type":"SW","value":0.0,"pins":{"1":"VIN","2":"SW","3":"PWM","4":"GND"},"model":"SWMOD"},
+    {"ref":"D1","type":"D","value":0.0,"pins":{"1":"GND","2":"SW"},"model":"DGEN"},
+    {"ref":"L1","type":"L","value":9.722222222222223e-06,"pins":{"1":"SW","2":"OUT"}},
+    {"ref":"C1","type":"C","value":1.4999999999999999e-05,"pins":{"1":"OUT","2":"GND"}},
+    {"ref":"RL1","type":"R","value":2.5,"pins":{"1":"OUT","2":"GND"}},
+    {"ref":"V2","type":"V","value":0.0,"pins":{"1":"PWM","2":"GND"},"waveform":{"type":"pulse","params":[0.0,5.0,0.0,1e-09,1e-09,8.333333333333333e-07,2e-06]}}
   ],
-  "analyses": [
-    {
-      "type": "tran",
-      "step": 2e-09,
-      "stop": 4e-05
-    }
-  ],
-  "deliverables": [
-    "bom",
-    "kicad_net",
-    "kicad_sch",
-    "ltspice_asc",
-    "report",
-    "spice"
-  ],
+  "analyses": [{"type":"tran","step":2e-09,"stop":4e-05}],
+  "deliverables": ["bom","kicad_net","kicad_sch","ltspice_asc","report","spice"],
   "assumptions": [
     "CCM, ideal switch and diode, 30% ripple",
     "Generic switch/diode models; verify with the real controller and FET",
@@ -120,11 +24,29 @@
   ],
   "models": {},
   "notes": [],
-  "environment": {
-    "ta_c": 25.0,
-    "tj_max_c": 125.0
-  },
-  "verification": {
-    "tolerance_percent": 2.0
+  "environment": {"ta_c":25.0,"tj_max_c":125.0},
+  "verification": {"tolerance_percent":2.0},
+  "design": {
+    "requirements": [
+      {"id":"R1","text":"Convert a nominal 12 V DC input to a nominal 5 V DC output.","acceptance":"Spec declares VIN=12 V and VOUT=5 V.","source":"examples/plain-language-buck.md"},
+      {"id":"R2","text":"Supply a 2 A nominal output load.","acceptance":"Spec declares IOUT=2 A and a 2.5 ohm nominal load.","source":"examples/plain-language-buck.md"},
+      {"id":"R3","text":"Provide editable circuit and simulation deliverables.","acceptance":"Generate SPICE, LTspice, KiCad schematic/netlist, BOM and report artifacts.","source":"examples/plain-language-buck.md"}
+    ],
+    "architecture": {
+      "summary":"Non-isolated asynchronous buck-converter power-stage model using an ideal controlled switch, freewheel diode, inductor and output capacitor.",
+      "blocks":["12 V DC input","PWM-controlled switch","freewheel diode","LC output filter","2.5 ohm / 2 A nominal load"],
+      "budgets":{"switching_frequency":"500 kHz assumed","inductor_ripple":"30% assumed","output_power":"10 W nominal"}
+    },
+    "decisions": [
+      {"id":"D1","decision":"Use a buck-converter topology.","alternatives":["Linear regulator","Boost converter"],"rationale":"The requested output is lower than the input; a buck topology is the appropriate step-down architecture."},
+      {"id":"D2","decision":"Use ideal switch and diode models for the first-pass example.","alternatives":["Vendor-specific controller and semiconductor models"],"rationale":"This keeps the example runnable without proprietary device models; it is a topology demonstration, not a production-ready component selection."}
+    ],
+    "risks": [
+      {"id":"K1","risk":"Ideal switch and diode models do not capture real semiconductor losses, switching behavior or safe operating area.","severity":"high","mitigation":"Select a controller, MOSFET and diode from current datasheets; replace generic models and calculate worst-case stresses before hardware use.","verification":"Run vendor-model simulation and verify voltage, current, thermal and SOA margins at input/load/temperature extremes."},
+      {"id":"K2","risk":"The example does not design feedback compensation, startup, current limiting, EMI or thermal management.","severity":"high","mitigation":"Treat the example as a power-stage scaffold only; add control-loop, protection and thermal design before implementation.","verification":"Complete loop stability, transient, fault, conducted/radiated EMI and thermal tests on the final design."}
+    ],
+    "sources": [
+      {"title":"Plain-language example brief","document":"examples/plain-language-buck.md","revision":"1","accessed":"2026-11-10"}
+    ]
   }
 }
