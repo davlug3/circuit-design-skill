@@ -156,6 +156,16 @@
             ],
             "description": "Numeric value in SI units, or a SPICE value string such as 4k7."
           },
+          "placement": {
+            "type": "object",
+            "description": "Optional KiCad-only symbol placement override in millimetres. Coordinates must be positive and aligned to the 1.27 mm grid.",
+            "required": ["x_mm", "y_mm"],
+            "properties": {
+              "x_mm": {"type": "number", "exclusiveMinimum": 0},
+              "y_mm": {"type": "number", "exclusiveMinimum": 0}
+            },
+            "additionalProperties": false
+          },
           "tolerance_percent": {
             "type": "number",
             "minimum": 0,
