@@ -389,6 +389,13 @@ def normalize_component(comp: dict[str, Any]) -> tuple[dict[str, Any], list[str]
     for key in ("footprint", "model", "notes", "params", "waveform"):
         if key in comp:
             out[key] = comp[key]
+    if "tolerance_percent" in comp:
+        tolerance = comp["tolerance_percent"]
+        if (not isinstance(tolerance, (int, float)) or isinstance(tolerance, bool)
+                or not math.isfinite(float(tolerance))
+                or float(tolerance) < 0 or float(tolerance) >= 100):
+            raise ValueError(f"{ref}: tolerance_percent must be finite and in [0, 100)")
+        out["tolerance_percent"] = float(tolerance)
     for key in ("dc", "ac", "gain", "rout"):
         if key in comp:
             out[key] = float(comp[key])
