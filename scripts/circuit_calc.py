@@ -21,6 +21,7 @@ Run ``python3 circuit_calc.py list`` for the command list and
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import math
 import sys
@@ -1321,19 +1322,34 @@ def calc_eseries(p: dict[str, Any]) -> dict[str, Any]:
 
 
 def calc_tolerance(p: dict[str, Any]) -> dict[str, Any]:
+    """Calculate first-order sensitivity and exact independent tolerance corners.
+
+    Exact corner enumeration is deterministic and exhaustive for the supported
+    scalar equations. It is not a substitute for nonlinear circuit simulation
+    or correlated component/temperature models.
+    """
     mode = (p.get("mode") or "divider").lower()
     comps = p.get("components") or {}
-    if not comps:
+    if not isinstance(comps, dict) or not comps:
         raise CalcError("provide components as a JSON object: {'R1': {'value':..., 'tol':...}}")
+    if len(comps) > 16:
+        raise CalcError("exact corner analysis supports at most 16 variables (65,536 corners)")
+
     nominal: dict[str, float] = {}
     tol: dict[str, float] = {}
     for name, spec in comps.items():
         if isinstance(spec, (int, float)):
-            nominal[name] = float(spec)
-            tol[name] = 0.0
+            value, tolerance = float(spec), 0.0
+        elif isinstance(spec, dict) and "value" in spec:
+            value = float(spec["value"])
+            tolerance = float(spec.get("tol", spec.get("tolerance_percent", 0.0))) / 100.0
         else:
-            nominal[name] = float(spec["value"])
-            tol[name] = float(spec.get("tol", 0.0)) / 100.0
+            raise CalcError(f"{name}: expected a number or an object with a value")
+        if not math.isfinite(value) or not math.isfinite(tolerance):
+            raise CalcError(f"{name}: value and tolerance must be finite")
+        if tolerance < 0 or tolerance >= 1:
+            raise CalcError(f"{name}: tolerance must be >= 0 and < 100 percent")
+        nominal[name], tol[name] = value, tolerance
 
     def evaluate(values: dict[str, float]) -> float:
         if mode == "sum":
@@ -1347,46 +1363,81 @@ def calc_tolerance(p: dict[str, Any]) -> dict[str, Any]:
             return parallel(*values.values())
         if mode == "divider":
             _need(values, "vin", "r1", "r2")
+            if values["r1"] <= 0 or values["r2"] <= 0:
+                raise CalcError("divider resistances must remain positive")
             return values["vin"] * values["r2"] / (values["r1"] + values["r2"])
         if mode == "rc_fc":
             _need(values, "r", "c")
+            if values["r"] <= 0 or values["c"] <= 0:
+                raise CalcError("R and C must remain positive")
             return 1.0 / (2 * math.pi * values["r"] * values["c"])
         if mode == "custom":
             coeffs = p.get("coefficients") or {}
-            return sum(coeffs.get(k, 0.0) * v for k, v in values.items())
+            return sum(float(coeffs.get(k, 0.0)) * v for k, v in values.items())
         raise CalcError(f"unknown tolerance mode {mode!r}")
 
     base = evaluate(nominal)
-    # Relative sensitivity S_i = dF/dx_i * x_i.  A tolerance tol_i then
-    # contributes |S_i|*tol_i to the output, independent of unit scaling.
+    if not math.isfinite(base):
+        raise CalcError("nominal result is not finite")
+
     sens: dict[str, float] = {}
     for name, value in nominal.items():
-        delta = max(abs(value) * 1e-4, 1e-12)
+        delta = max(abs(value) * 1e-5, 1e-12)
         up = dict(nominal)
         up[name] = value + delta
         sens[name] = (evaluate(up) - base) / delta * value
 
-    worst = sum(abs(sens[k] * tol[k]) for k in nominal)
+    linear_worst = sum(abs(sens[k] * tol[k]) for k in nominal)
     rss = math.sqrt(sum((sens[k] * tol[k]) ** 2 for k in nominal))
+
+    names = list(nominal)
+    corner_results: list[tuple[float, dict[str, str]]] = []
+    for signs in itertools.product((-1, 1), repeat=len(names)):
+        corner = {
+            name: nominal[name] * (1.0 + signs[i] * tol[name])
+            for i, name in enumerate(names)
+        }
+        value = evaluate(corner)
+        if not math.isfinite(value):
+            raise CalcError("a tolerance corner produced a non-finite result")
+        corner_results.append((value, {
+            name: "min" if signs[i] < 0 else "max"
+            for i, name in enumerate(names) if tol[name] > 0
+        }))
+    low = min(corner_results, key=lambda item: item[0])
+    high = max(corner_results, key=lambda item: item[0])
+
     return result(
         inputs={"mode": mode, "components": comps},
         results={
             "nominal": base,
-            "worst_case_absolute": worst,
-            "worst_case_percent": worst / base * 100 if base else None,
+            "worst_case_absolute": max(abs(base - low[0]), abs(high[0] - base)),
+            "worst_case_percent": max(abs(base - low[0]), abs(high[0] - base)) / abs(base) * 100 if base else None,
+            "worst_case_range": [low[0], high[0]],
+            "worst_case_corners": {"minimum": low[1], "maximum": high[1]},
+            "corners_evaluated": len(corner_results),
+            "linearized_worst_case_range": [base - linear_worst, base + linear_worst],
             "rss_absolute": rss,
-            "rss_percent": rss / base * 100 if base else None,
-            "sensitivities": sens,
-            "worst_case_range": [base - worst, base + worst],
+            "rss_percent": rss / abs(base) * 100 if base else None,
             "rss_range": [base - rss, base + rss],
+            "sensitivities": sens,
         },
         formulas=[
-            "first-order sensitivity S_i = dF/dx_i * x_i",
-            "worst case = sum |S_i|*tol_i",
+            "exact independent corners: evaluate all 2^N combinations of min/max component values",
+            "linearized sensitivity S_i = dF/dx_i * x_i",
+            "linearized worst case = sum |S_i|*tol_i",
             "RSS = sqrt(sum (S_i*tol_i)^2)",
         ],
-        assumptions=["component tolerances are independent and symmetric; linearised first-order propagation"],
-        notes=["RSS is a statistical estimate, not a guaranteed bound; use worst case for safety-critical limits"],
+        assumptions=[
+            "component tolerances are independent and symmetric",
+            "exact corner range applies only to the selected scalar equation and stated tolerances",
+            "temperature coefficients, aging, voltage coefficients and correlations are excluded unless explicitly folded into the input limits",
+        ],
+        notes=[
+            "Exact corners are deterministic for the supported equations; they are not Monte Carlo yield predictions",
+            "RSS is a statistical estimate, not a guaranteed bound; use exact worst case for limit checks",
+            "For nonlinear semiconductor circuits, run corner simulations with vendor models and justified model/temperature parameters",
+        ],
     )
 
 
