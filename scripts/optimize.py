@@ -107,10 +107,12 @@ def optimize_rc_lowpass(
     optimized = copy.deepcopy(spec)
     optimized.setdefault("parameters", {})["r"] = best["r_ohm"]
     optimized["parameters"]["c"] = best["c_f"]
-    resistors[0]["value"] = best["r_ohm"]
-    resistors[0]["tolerance_percent"] = r_tolerance_percent
-    capacitors[0]["value"] = best["c_f"]
-    capacitors[0]["tolerance_percent"] = c_tolerance_percent
+    optimized_resistors = [part for part in optimized.get("components", []) if part.get("type") == "R"]
+    optimized_capacitors = [part for part in optimized.get("components", []) if part.get("type") == "C"]
+    optimized_resistors[0]["value"] = best["r_ohm"]
+    optimized_resistors[0]["tolerance_percent"] = r_tolerance_percent
+    optimized_capacitors[0]["value"] = best["c_f"]
+    optimized_capacitors[0]["tolerance_percent"] = c_tolerance_percent
     assumptions = optimized.setdefault("assumptions", [])
     assumption = (
         "RC optimization assumes an ideal zero-ohm source and an unloaded output; "
