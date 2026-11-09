@@ -68,6 +68,7 @@ class TestGenerateRC(unittest.TestCase):
 
     def test_kicad_placement_override(self):
         spec = json.loads(self.spec_path.read_text())
+        spec["name"] = "placed"
         resistor = next(item for item in spec["components"] if item["type"] == "R")
         resistor["placement"] = {"x_mm": 101.6, "y_mm": 76.2}
         path = self.out / "placed.json"
