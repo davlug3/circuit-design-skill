@@ -10,28 +10,78 @@
     "section": "4, Pin Configuration and Functions"
   },
   "symbol": {
-    "component_type": "IC8",
-    "pin_numbers": [1, 2, 3, 4, 5, 6, 7, 8],
+    "component_type": "TPS5430",
+    "pin_numbers": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
     "pins": {
-      "1": {"name": "BOOT", "type": "output", "description": "High-side gate-driver bootstrap; connect 10 nF to PH."},
-      "2": {"name": "NC", "type": "no_connect", "description": "Not connected internally."},
-      "3": {"name": "NC", "type": "no_connect", "description": "Not connected internally."},
-      "4": {"name": "VSENSE", "type": "input", "description": "Feedback input; connect to output voltage divider."},
-      "5": {"name": "ENA", "type": "input", "description": "Active-high enable; below 0.5 V device stops switching."},
-      "6": {"name": "GND", "type": "ground", "description": "Ground return; connect to exposed pad."},
-      "7": {"name": "VIN", "type": "supply", "description": "Input supply."},
-      "8": {"name": "PH", "type": "switch_node", "description": "High-side MOSFET switch node; connects to inductor and catch diode."}
+      "1": {
+        "name": "BOOT",
+        "type": "output",
+        "description": "High-side gate-driver bootstrap; connect 10 nF to PH."
+      },
+      "2": {
+        "name": "NC",
+        "type": "no_connect",
+        "description": "Not connected internally."
+      },
+      "3": {
+        "name": "NC",
+        "type": "no_connect",
+        "description": "Not connected internally."
+      },
+      "4": {
+        "name": "VSENSE",
+        "type": "input",
+        "description": "Feedback input; connect to output voltage divider."
+      },
+      "5": {
+        "name": "ENA",
+        "type": "input",
+        "description": "Active-high enable; below 0.5 V device stops switching."
+      },
+      "6": {
+        "name": "GND",
+        "type": "ground",
+        "description": "Ground return; connect to exposed pad."
+      },
+      "7": {
+        "name": "VIN",
+        "type": "supply",
+        "description": "Input supply."
+      },
+      "8": {
+        "name": "PH",
+        "type": "switch_node",
+        "description": "High-side MOSFET switch node; connects to inductor and catch diode."
+      },
+      "9": {
+        "name": "DAP",
+        "type": "thermal_pad",
+        "datasheet_pin_number": null,
+        "schematic_symbol_pin_number": "9",
+        "description": "Exposed thermal pad; connect to GND. The schematic uses 9 as an internal symbol/footprint-pad placeholder only."
+      }
     }
   },
   "exposed_pad": {
     "package_terminal": "DAP",
     "pin_number": null,
     "net": "GND",
-    "required_connection": "Connect exposed pad to GND; TI specifies that GND pin 6 must be connected to DAP."
+    "required_connection": "Connect exposed pad to GND; TI specifies that GND pin 6 must be connected to DAP. The Rev L datasheet does not assign a numeric pin number to DAP.",
+    "schematic_symbol_pin_number": "9"
   },
   "limitations": [
-    "This file records the datasheet pin-function mapping; the generic IC8 generator still emits numbered pins only.",
-    "The exposed thermal pad is a separate package terminal and is not represented by the current eight-pin IC8 symbol.",
+    "The TPS5430-specific KiCad symbol uses datasheet pin names for signal pins 1–8.",
+    "The schematic assigns symbol pin number 9 to the exposed DAP only as an internal placeholder; confirm the exact pad numbering against the selected package CAD before PCB work.",
     "This mapping does not establish PCB footprint correctness, electrical simulation, thermal performance, or hardware readiness."
   ]
 }
