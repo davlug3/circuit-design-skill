@@ -1179,7 +1179,10 @@ def validate_spec(spec: dict[str, Any], base_dir: str | Path | None = None) -> d
         missing = REQUIRED_PINS[ctype] - set(comp["pins"])
         if missing:
             errors.append(f"{ref} ({ctype}) is missing pin(s): {', '.join(sorted(missing))}")
-        for net in comp["pins"].values():
+        no_connect_pins = set(comp.get("no_connect_pins", []))
+        for pin, net in comp["pins"].items():
+            if pin in no_connect_pins:
+                continue
             nets.setdefault(net, []).append(ref)
         if ctype in ("NPN", "PNP", "NMOS", "PMOS", "D", "LED", "ZENER") and not comp.get("model"):
             warnings.append(
