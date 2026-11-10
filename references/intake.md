@@ -91,7 +91,7 @@ silently substitute an unverified component.
 
 | Question | Why it matters | Spec field |
 |---|---|---|
-| Which files: SPICE, LTspice `.asc`, KiCad `.kicad_sch`, `.net`, BOM, report? | Output selection | `deliverables` |
+| Additional formats beyond the standard KiCad project, schematic, PCB, BOM and SPICE netlist? | Optional output selection | `deliverables` |
 | Which analyses: OP, AC, transient, DC sweep, noise, transfer function? | Directives in the netlist | `analyses` |
 | Are vendor SPICE models available? | Generic models are unverified | `models` |
 | Which simulator/version? | Syntax and model compatibility | `parameters` |
@@ -112,7 +112,7 @@ not need them.
 
 | Question | Why it matters | Spec field |
 |---|---|---|
-| Board width, height and layer count? | Required; the skill does not guess mechanics | `pcb.board` |
+| Board width, height and layer count? | Required for native PCB generation; ask if unknown | `pcb.board` |
 | Thickness, copper weight, material and finish? | Stackup and fabrication | `pcb.board` |
 | Which pcb-design-skill profile? | DRC/DFM/thermal/impedance gates | `pcb.profile` |
 | Which real footprint for each reference? | Logical SPICE pins are not pads | `pcb.footprints` |
@@ -138,9 +138,7 @@ Start with a short conversational prompt covering:
 
 Ask only the follow-up questions needed to resolve consequential unknowns. If
 answers are unavailable, use common defaults only where safe and record them.
-The standard output is the complete KiCad project, schematic, PCB, BOM and
-SPICE netlist; ask whether the user wants additional LTspice/report formats or
-has constraints on the PCB.
+The standard output is a complete KiCad project (`.kicad_pro`), editable schematic (`.kicad_sch`), native PCB (`.kicad_pcb`), BOM and SPICE netlist. Also provide simulation evidence, model/source provenance, a verification report and fabrication files whose checks pass. Ask about board dimensions, layer count and other physical constraints when they are not supplied. Treat the PCB overlay as an intermediate handoff only, never as the final board.
 
 ## Turning answers into a spec
 
