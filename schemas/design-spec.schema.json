@@ -431,7 +431,8 @@
         "kicad_net",
         "kicad_sch",
         "bom",
-        "report"
+        "report",
+        "pcb"
       ]
     },
     "assumptions": {
