@@ -131,14 +131,11 @@ Do this before intake or scaffolding. It is the cheapest place to fix a design.
 
 ### 1. Intake
 
-Ask the questions in `references/intake.md`. The minimum viable set:
+Treat every natural-language request as a request for a complete, build-oriented design unless the user explicitly limits scope. Conduct the short conversational intake in `references/intake.md`; do not make the user fill out an engineering form or know component terminology.
 
-- What must it do, and what are the input and output?
-- What supply voltage(s) are available?
-- What load must it drive?
-- What accuracy, bandwidth or current is required?
-- Which deliverables: SPICE, LTspice `.asc`, KiCad `.kicad_sch`/`.net`, BOM,
-  report, PCB handoff?
+The standard deliverable set is mandatory: a native KiCad project (`.kicad_pro`), editable schematic (`.kicad_sch`), PCB (`.kicad_pcb`), researched footprints and physical pin maps, BOM (`.csv`), SPICE netlist (`.cir`), simulation results/logs, and a verification report. Include models and provenance, rendered schematic, and fabrication outputs when their relevant gates pass. Ask for missing board dimensions, layer count, connectors, mounting, fabrication or assembly preferences needed to complete the board. Do not silently downgrade the request to a PCB overlay or handoff: if the native board workflow is unavailable, report the exact missing artifact and mark the project incomplete.
+
+Ask what the circuit must do, its inputs/outputs, supply and load, performance targets, environment/safety constraints, and build preferences. Offer common choices in plain language (for example through-hole vs SMD, low-cost vs high-performance, compact vs easy-to-hand-solder). Use conventional defaults only for non-critical omissions, record them, and ask before resolving anything that affects safety, topology, interface compatibility, or acceptance.
 
 For a fast path, scaffold a known topology and then edit the JSON:
 
@@ -313,7 +310,7 @@ Without `--formats`, the spec's `deliverables` list is used. Outputs:
 | `<name>.kicad_sch` | KiCad 9 schematic with embedded symbols |
 | `<name>-bom.csv` | Bill of materials |
 | `<name>-report.md` / `.json` | Design report |
-| `<name>-pcb.json` | PCB overlay (when `pcb` or `--pcb-board` is requested) |
+| `<name>-pcb.json` | Intermediate PCB handoff overlay; not a native board |
 | `<name>-pinmap.json` | SPICE pin -> footprint pad map |
 | `<name>-node-aliases.json` | SPICE node -> PCB net aliases |
 | `<name>-pcb-handoff.md` | Exact PCB-skill command and remaining gaps |
@@ -327,11 +324,11 @@ Use placement overrides to organize the KiCad drawing into functional blocks;
 the LTspice `.asc` retains its own deterministic grid. Clean up the presentation
 in LTspice or KiCad if you need a publication-quality drawing.
 
-### 6. PCB handoff
+### 6. PCB generation and handoff
 
-PCB files are opt-in: add `"pcb"` to `deliverables`, pass `--pcb-board
-WIDTHxHEIGHT`, or add `pcb` to `--formats`. The handoff needs a board size; it
-does not guess one.
+A PCB is part of the standard deliverable set, not an optional afterthought. Ask for board size, layer count, connector placement, mounting, stackup and fabrication constraints when these are not supplied. Use only ordinary, explicitly recorded defaults for non-critical manufacturing choices; never guess a mechanical envelope, isolation spacing, impedance requirement or connector pinout. Generate a native `.kicad_pcb` and matching `.kicad_pro` through the sibling `pcb-design-skill`, using the schematic netlist, researched footprints and datasheet-backed pin maps. The JSON overlay is an intermediate handoff artifact only and does not satisfy the PCB deliverable.
+
+If the sibling PCB workflow is unavailable, still generate all supported electrical artifacts and the complete PCB handoff package, but mark `.kicad_pcb`/`.kicad_pro` as NOT GENERATED and the project as INCOMPLETE. Never describe the handoff overlay as a board or claim fabrication readiness.
 
 ```bash
 python3 scripts/generate_with_footprints.py specs/rc.json --out out/ --pcb-board 50x40
@@ -342,12 +339,7 @@ The circuit spec may carry a `pcb` block with `profile`, `board`, `rules`,
 `netclasses`, `footprints`, `pin_map`, `node_aliases`, `placement`, `routing`
 and `extra_components`. See `references/pcb-handoff.md`.
 
-The handoff writes the overlay, a pin map and node aliases, then prints the
-exact command for `pcb-design-skill`. It never guesses a footprint or a package
-pinout: missing footprints and pin maps are listed for the PCB skill's visual
-picker. Logical SPICE pins are not physical pads (NPN 1/2/3 = C/B/E here), so a
-pin map from the real datasheet is mandatory for multi-pin parts. An op-amp
-`U1` is imported by SPICE as `XU1`; the handoff maps the reference and says so.
+The handoff writes the overlay, a pin map and node aliases, then prints the exact command for `pcb-design-skill`. This is an intermediate stage only: continue through native board generation, placement, routing and validation. It never guesses a footprint or package pinout. Missing footprints and pin maps are blockers, not acceptable final omissions. Logical SPICE pins are not physical pads (NPN 1/2/3 = C/B/E here), so a pin map from the real datasheet is mandatory for multi-pin parts. An op-amp `U1` is imported by SPICE as `XU1`; the handoff maps the reference and says so.
 
 Do not claim a board is manufacturable until the PCB skill's DRC, DFM,
 unconnected and netlist-parity gates pass.
