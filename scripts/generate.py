@@ -612,7 +612,11 @@ def kicad_schematic(spec: dict[str, Any], *, version: str = "20250114") -> str:
     for comp in norm["components"]:
         ref = comp["ref"]
         sx, sy = positions[ref]
+        no_connect_pins = {str(pin) for pin in comp.get("no_connect_pins", [])}
         for pin, (x, y, angle) in kicad_pins(comp["type"], sx, sy, 0, None).items():
+            if pin in no_connect_pins:
+                out.append(f"\t(no_connect (at {x:g} {y:g}) (uuid {_q(uid(norm['name'], 'no-connect', ref, pin))}))")
+                continue
             net = comp["pins"][pin]
             key = (round(x, 4), round(y, 4), net)
             if key in seen:
@@ -649,7 +653,7 @@ _TYPE_NAMES = {
     "I": "Current source", "D": "Diode", "LED": "LED", "ZENER": "Zener diode",
     "NPN": "NPN transistor", "PNP": "PNP transistor", "NMOS": "N-MOSFET",
     "PMOS": "P-MOSFET", "OPAMP": "Op-amp", "SW": "Analog switch",
-    "E": "VCVS", "G": "VCCS",
+    "E": "VCVS", "G": "VCCS", "TPS5430": "Buck regulator",
 }
 
 
@@ -667,6 +671,8 @@ def _bom_value(comp: dict[str, Any]) -> str:
         return f"{comp.get('model', 'generic')}"
     if ctype in ("NPN", "PNP", "NMOS", "PMOS", "SW", "OPAMP"):
         return f"{comp.get('model', 'generic')}"
+    if ctype == "TPS5430":
+        return str(comp.get("part_number", "TPS5430DDA"))
     return _fmt(comp["value"])
 
 

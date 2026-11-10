@@ -41,7 +41,7 @@ from circuit_common import (  # noqa: E402
 
 SCHEMA_VERSION = "1.0"
 SUPPORTED_TYPES = {"R", "C", "L", "V", "I", "D", "LED", "ZENER", "NPN", "PNP",
-                   "NMOS", "PMOS", "OPAMP", "SW", "E", "G"}
+                   "NMOS", "PMOS", "OPAMP", "SW", "E", "G", "IC8", "TPS5430"}
 DELIVERABLES = {"spice", "ltspice_asc", "kicad_net", "kicad_sch", "bom", "report"}
 # "pcb" is opt-in: it needs board dimensions and is not part of the electrical
 # deliverables.  Keep it out of DELIVERABLES so the default set is unchanged.
@@ -88,6 +88,14 @@ SPICE_PREFIX_NODE_COUNT = {
 SIMULATION_ONLY_TYPES = {"V", "I", "E", "G"}
 
 PIN_ALIASES: dict[str, dict[str, str]] = {
+    "TPS5430": {
+        "1": "1", "BOOT": "1", "2": "2", "NC1": "2",
+        "3": "3", "NC2": "3", "4": "4", "VSENSE": "4",
+        "5": "5", "ENA": "5", "6": "6", "GND": "6",
+        "7": "7", "VIN": "7", "8": "8", "PH": "8",
+        "9": "9", "DAP": "9",
+    },
+    "IC8": {**{str(n): str(n) for n in range(1, 9)}},
     "R": {"1": "1", "2": "2", "A": "1", "B": "2", "+": "1", "-": "2"},
     "C": {"1": "1", "2": "2", "A": "1", "B": "2", "+": "1", "-": "2"},
     "L": {"1": "1", "2": "2", "A": "1", "B": "2", "+": "1", "-": "2"},
@@ -123,6 +131,8 @@ REQUIRED_PINS: dict[str, set[str]] = {
     "NMOS": {"1", "2", "3"}, "PMOS": {"1", "2", "3"},
     "OPAMP": {"1", "2", "5"}, "SW": {"1", "2", "3", "4"},
     "E": {"1", "2", "3", "4"}, "G": {"1", "2", "3", "4"},
+    "IC8": {"1", "2", "3", "4", "5", "6", "7", "8"},
+    "TPS5430": {"1", "2", "3", "4", "5", "6", "7", "8", "9"},
 }
 
 
@@ -389,6 +399,18 @@ def normalize_component(comp: dict[str, Any]) -> tuple[dict[str, Any], list[str]
     for key in ("footprint", "model", "notes", "params", "waveform"):
         if key in comp:
             out[key] = comp[key]
+    for key in ("part_number", "datasheet"):
+        if key in comp:
+            out[key] = str(comp[key])
+    if "no_connect_pins" in comp:
+        raw_no_connect = comp["no_connect_pins"]
+        if not isinstance(raw_no_connect, list):
+            raise ValueError(f"{ref}: no_connect_pins must be a list of pin numbers")
+        no_connect = {canonical_pin(ctype, pin) for pin in raw_no_connect}
+        unknown_no_connect = no_connect - set(pins)
+        if unknown_no_connect:
+            raise ValueError(f"{ref}: no_connect_pins references unknown pins: {sorted(unknown_no_connect)}")
+        out["no_connect_pins"] = sorted(no_connect)
     if "placement" in comp:
         placement = comp["placement"]
         if not isinstance(placement, dict) or set(placement) != {"x_mm", "y_mm"}:
@@ -1146,6 +1168,15 @@ def validate_spec(spec: dict[str, Any], base_dir: str | Path | None = None) -> d
         errors.append("name may contain only letters, digits, dot, underscore and hyphen")
 
     comps = norm["components"]
+    if any(c["type"] == "IC8" for c in comps):
+        unsupported = set(norm["deliverables"]) & {"spice", "ltspice_asc", "pcb"}
+        if unsupported:
+            errors.append("IC8 is currently a schematic-only placeholder; unsupported deliverables: " + ", ".join(sorted(unsupported)))
+        warnings.append("IC8 pins are numbered only; add a verified device-specific pin-function map before treating the schematic as an electrical design")
+    if any(c["type"] == "TPS5430" for c in comps):
+        unsupported = set(norm["deliverables"]) & {"spice", "ltspice_asc", "pcb"}
+        if unsupported:
+            errors.append("TPS5430 is currently supported for schematic/netlist/BOM/report only; vendor simulation model and verified PCB footprint are not integrated: " + ", ".join(sorted(unsupported)))
     refs: set[str] = set()
     nets: dict[str, list[str]] = {}
     for comp in comps:
@@ -1156,7 +1187,10 @@ def validate_spec(spec: dict[str, Any], base_dir: str | Path | None = None) -> d
         missing = REQUIRED_PINS[ctype] - set(comp["pins"])
         if missing:
             errors.append(f"{ref} ({ctype}) is missing pin(s): {', '.join(sorted(missing))}")
-        for net in comp["pins"].values():
+        no_connect_pins = set(comp.get("no_connect_pins", []))
+        for pin, net in comp["pins"].items():
+            if pin in no_connect_pins:
+                continue
             nets.setdefault(net, []).append(ref)
         if ctype in ("NPN", "PNP", "NMOS", "PMOS", "D", "LED", "ZENER") and not comp.get("model"):
             warnings.append(
@@ -1194,8 +1228,10 @@ def validate_spec(spec: dict[str, Any], base_dir: str | Path | None = None) -> d
     ground = norm["ground"]
     if ground not in nets:
         errors.append(f"ground net {ground!r} is not connected to any component")
-    if not any(c["type"] in ("V", "I") for c in comps):
-        errors.append("at least one independent source (V or I) is required for simulation")
+    if ({"spice", "ltspice_asc"} & set(norm["deliverables"])) and not any(
+        c["type"] in ("V", "I") for c in comps
+    ):
+        errors.append("at least one independent source (V or I) is required for simulation deliverables")
 
     # Nets with only one pin are almost always a wiring mistake, except for
     # explicit test points / hierarchical labels.

@@ -164,6 +164,25 @@ jobs:
             echo "No KiCad schematic requested by this spec; image export skipped."
           fi
 
+      - name: Verify TPS5430 reference schematic
+        env:
+          CIRCUIT_BACKEND: ci
+        run: |
+          set -euo pipefail
+          python scripts/verify.py examples/tps5430-12v-5v-2a.json \
+            --out out-tps5430 --json --require design,kicad-parse \
+            | tee tps5430-verification.json
+
+      - name: Render TPS5430 schematic
+        run: |
+          set -euo pipefail
+          schematics=(out-tps5430/*.kicad_sch)
+          if (( ${#schematics[@]} )); then
+            python scripts/render_schematic.py "${schematics[0]}" --out out-tps5430/images
+          else
+            echo "TPS5430 schematic was not generated." >&2
+            exit 1
+          fi
       - name: Verify gain and bandwidth metrics
         env:
           CIRCUIT_BACKEND: ci
@@ -181,6 +200,8 @@ jobs:
           path: |
             out/
             out/images/
+            out-tps5430/
+            tps5430-verification.json
             out-metrics/
             verification.json
             metrics-verification.json

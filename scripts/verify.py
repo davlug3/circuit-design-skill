@@ -391,6 +391,11 @@ def check_kicad_sch(spec: dict[str, Any], path: Path) -> Check:
         key = (round(float(label.position.X), 3), round(float(label.position.Y), 3))
         labels.setdefault(key, set()).add(label.text)
 
+    no_connects = {
+        (round(float(item.position.X), 3), round(float(item.position.Y), 3))
+        for item in getattr(sch, "noConnects", [])
+    }
+
     by_ref: dict[str, Any] = {}
     for sym in sch.schematicSymbols:
         ref = next((p.value for p in sym.properties if p.key == "Reference"), None)
@@ -411,6 +416,7 @@ def check_kicad_sch(spec: dict[str, Any], path: Path) -> Check:
         pins = {p.number: p for unit in lib.units for p in unit.pins}
         angle = int(getattr(sym.position, "angle", 0) or 0)
         mirror = getattr(sym, "mirror", None)
+        no_connect_pins = {str(pin) for pin in comp.get("no_connect_pins", [])}
         for pin_num, net in comp["pins"].items():
             pin = pins.get(pin_num)
             if pin is None:
@@ -418,7 +424,12 @@ def check_kicad_sch(spec: dict[str, Any], path: Path) -> Check:
                 continue
             x, y = _kicad_pin_world(sym, pin, float(sym.position.X),
                                     float(sym.position.Y), angle, mirror)
-            found = labels.get((round(x, 3), round(y, 3)), set())
+            endpoint = (round(x, 3), round(y, 3))
+            if pin_num in no_connect_pins:
+                if endpoint not in no_connects:
+                    problems.append(f"{ref} pin {pin_num}: missing no-connect marker at ({x:.2f}, {y:.2f})")
+                continue
+            found = labels.get(endpoint, set())
             if net not in found:
                 problems.append(
                     f"{ref} pin {pin_num}: no global label {net!r} at "

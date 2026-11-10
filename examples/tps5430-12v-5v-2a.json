@@ -1,0 +1,293 @@
+{
+  "name": "tps5430-12v-to-5v-2a-reference",
+  "description": "Schematic reference for a TI TPS5430DDA asynchronous buck stage. Component values start from TI's 12 V to 5 V reference application; this is not a PCB-release or hardware-validated design.",
+  "topology": "asynchronous_buck",
+  "ground": "GND",
+  "parameters": {
+    "vin_nominal_v": 12,
+    "vout_target_v": 5,
+    "iout_target_a": 2,
+    "fsw_nominal_hz": 500000
+  },
+  "supplies": [
+    {
+      "name": "VIN",
+      "voltage": 12
+    }
+  ],
+  "deliverables": [
+    "kicad_sch",
+    "kicad_net",
+    "bom",
+    "report"
+  ],
+  "components": [
+    {
+      "ref": "U1",
+      "type": "TPS5430",
+      "value": 0,
+      "part_number": "TPS5430DDA",
+      "footprint": "",
+      "notes": "TI SLVS632L; DDA HSOIC with exposed thermal pad. Footprint intentionally unassigned pending package CAD verification.",
+      "no_connect_pins": [
+        "2",
+        "3",
+        "5"
+      ],
+      "placement": {
+        "x_mm": 139.7,
+        "y_mm": 101.6
+      },
+      "pins": {
+        "1": "BOOT",
+        "2": "NC_U1_2",
+        "3": "NC_U1_3",
+        "4": "FB",
+        "5": "NC_U1_5",
+        "6": "GND",
+        "7": "VIN",
+        "8": "SW",
+        "9": "GND"
+      }
+    },
+    {
+      "ref": "R1",
+      "type": "R",
+      "value": 10000,
+      "tolerance_percent": 1,
+      "placement": {
+        "x_mm": 241.3,
+        "y_mm": 63.5
+      },
+      "pins": {
+        "1": "OUT",
+        "2": "FB"
+      }
+    },
+    {
+      "ref": "R2",
+      "type": "R",
+      "value": 3240,
+      "tolerance_percent": 1,
+      "placement": {
+        "x_mm": 241.3,
+        "y_mm": 114.3
+      },
+      "pins": {
+        "1": "FB",
+        "2": "GND"
+      }
+    },
+    {
+      "ref": "C1",
+      "type": "C",
+      "value": 0.00001,
+      "placement": {
+        "x_mm": 63.5,
+        "y_mm": 76.2
+      },
+      "pins": {
+        "1": "VIN",
+        "2": "GND"
+      }
+    },
+    {
+      "ref": "C2",
+      "type": "C",
+      "value": 1e-8,
+      "placement": {
+        "x_mm": 101.6,
+        "y_mm": 63.5
+      },
+      "pins": {
+        "1": "BOOT",
+        "2": "SW"
+      }
+    },
+    {
+      "ref": "D1",
+      "type": "D",
+      "value": 0,
+      "model": "B340A",
+      "placement": {
+        "x_mm": 139.7,
+        "y_mm": 152.4
+      },
+      "pins": {
+        "1": "GND",
+        "2": "SW"
+      }
+    },
+    {
+      "ref": "L1",
+      "type": "L",
+      "value": 0.000015,
+      "placement": {
+        "x_mm": 190.5,
+        "y_mm": 152.4
+      },
+      "pins": {
+        "1": "SW",
+        "2": "OUT"
+      }
+    },
+    {
+      "ref": "C3",
+      "type": "C",
+      "value": 0.00022,
+      "placement": {
+        "x_mm": 241.3,
+        "y_mm": 152.4
+      },
+      "pins": {
+        "1": "OUT",
+        "2": "GND"
+      }
+    }
+  ],
+  "assumptions": [
+    "The component values are initial values from TI's 12 V to 5 V application circuit, not a fully optimized 2 A design.",
+    "ENA is intentionally left floating as permitted by the TI datasheet; do not pull it to ground.",
+    "TPS5430 pin 2 and pin 3 are NC and receive explicit KiCad no-connect markers.",
+    "TPS5430 exposed DAP is represented as schematic pin 9 and tied to GND; confirm the exact land-pattern pad mapping against the selected package CAD before PCB work.",
+    "No vendor electrical model is integrated; SPICE and LTspice deliverables are deliberately excluded.",
+    "Exact footprints, capacitor technology and DC-bias derating, inductor saturation/RMS ratings, diode thermal rating, input transient envelope, thermal design, and bench validation remain open."
+  ],
+  "notes": [
+    "Reference design only. Not approved for PCB release or hardware construction."
+  ],
+  "design": {
+    "requirements": [
+      {
+        "id": "R1",
+        "text": "Convert nominal 12 V DC to nominal 5 V DC.",
+        "acceptance": "VIN and OUT nets are present in the generated schematic.",
+        "source": "S1"
+      },
+      {
+        "id": "R2",
+        "text": "Support a nominal 2 A output load.",
+        "acceptance": "Reference power-stage values and 2 A target are documented; component stress and thermal validation remain open.",
+        "source": "S1"
+      }
+    ],
+    "architecture": {
+      "summary": "Asynchronous buck converter using TPS5430DDA, catch diode, 15 µH inductor, input/output capacitors and feedback divider.",
+      "blocks": [
+        "12 V input",
+        "TPS5430 controller and integrated high-side switch",
+        "B340A catch diode",
+        "15 µH output inductor",
+        "220 µF output capacitor",
+        "10 kΩ / 3.24 kΩ feedback divider"
+      ]
+    },
+    "decisions": [
+      {
+        "id": "D1",
+        "decision": "Use TI TPS5430DDA with the manufacturer's 12 V to 5 V reference values as the schematic starting point.",
+        "alternatives": [
+          "Ideal-switch topology fixture"
+        ],
+        "rationale": "The schematic is a datasheet-backed controller-level reference; it is not a simulated or validated implementation.",
+        "sources": [
+          "S1"
+        ]
+      }
+    ],
+    "risks": [
+      {
+        "id": "RK1",
+        "risk": "The DDA exposed pad schematic pin identifier is provisional until matched to the chosen package land pattern.",
+        "severity": "high",
+        "mitigation": "Keep PCB generation disabled and do not assign a footprint.",
+        "verification": "Compare the selected TI or vendor package CAD and land-pattern drawing before PCB work."
+      },
+      {
+        "id": "RK2",
+        "risk": "Passives are reference values, not finalized orderable parts with verified stress margins.",
+        "severity": "medium",
+        "mitigation": "Select exact parts and check bias, RMS, saturation, thermal and tolerance ratings.",
+        "verification": "Complete component-level calculations against the finalized input/load/ambient envelope."
+      },
+      {
+        "id": "RK3",
+        "risk": "Thermal, loop stability, transient and EMI performance have not been validated.",
+        "severity": "high",
+        "mitigation": "Do not release for construction; plan simulation and bench tests.",
+        "verification": "Complete model correlation and measured bench test plan on a reviewed PCB revision."
+      }
+    ],
+    "sources": [
+      {
+        "title": "Texas Instruments TPS5430, TPS5431 datasheet, SLVS632 Rev. L",
+        "url": "https://www.ti.com/lit/ds/symlink/tps5430.pdf",
+        "revision": "L",
+        "sections": [
+          "4 Pin Configuration and Functions",
+          "7.2.1 Design Requirements"
+        ],
+        "supports": [
+          "TPS5430DDA pin names and numbers",
+          "DAP-to-GND connection",
+          "BOOT capacitor connection",
+          "ENA floating behavior"
+        ],
+        "document": "SLVS632",
+        "accessed": "2026-11-10"
+      }
+    ],
+    "measurements": [
+      {
+        "id": "M1",
+        "requirement": "R1",
+        "test_point": "VIN at input connector and C1",
+        "quantity": "Input DC voltage",
+        "method": "Measure with a calibrated DMM before enabling the converter and during steady-state operation.",
+        "equipment": "Current-limited bench supply and DMM",
+        "conditions": "Nominal 12 V input; record startup and steady-state values.",
+        "acceptance": "Must remain within the final specified input operating and transient envelope; numeric limits must be fixed before hardware approval."
+      },
+      {
+        "id": "M2",
+        "requirement": "R1",
+        "test_point": "OUT at C3",
+        "quantity": "Output DC voltage and load regulation",
+        "method": "Measure at no load and at 0.5 A, 1 A, and 2 A after thermal steady state.",
+        "equipment": "Electronic load and calibrated DMM",
+        "conditions": "VIN = 12 V nominal; record ambient temperature and load current.",
+        "acceptance": "Compare against a formally specified output tolerance; the tolerance is not yet established by this reference study."
+      },
+      {
+        "id": "M3",
+        "requirement": "R2",
+        "test_point": "SW and OUT at C3",
+        "quantity": "Switch-node waveform and output ripple",
+        "method": "Capture switching waveform and output ripple using short probe grounds and suitable bandwidth limiting.",
+        "equipment": "Oscilloscope, low-inductance probe, electronic load",
+        "conditions": "VIN = 12 V; IOUT = 2 A; steady state.",
+        "acceptance": "Compare against sourced device and system limits after the measurement bandwidth and numeric ripple limits are defined."
+      },
+      {
+        "id": "M4",
+        "requirement": "R2",
+        "test_point": "U1, D1, L1, C1, and C3",
+        "quantity": "Component temperatures",
+        "method": "Measure case/surface temperatures after thermal equilibrium.",
+        "equipment": "Thermal camera or attached thermocouples",
+        "conditions": "VIN = 12 V; IOUT = 2 A; worst-case specified ambient and enclosure conditions.",
+        "acceptance": "All selected components must remain within derated datasheet limits; exact parts and numeric limits are still open."
+      },
+      {
+        "id": "M5",
+        "requirement": "R2",
+        "test_point": "OUT at C3",
+        "quantity": "Load-step transient response",
+        "method": "Apply a controlled 0.5 A to 2 A load step and capture output deviation and settling.",
+        "equipment": "Electronic load with transient mode and oscilloscope",
+        "conditions": "VIN = 12 V; step from 0.5 A to 2 A; record slew rate and ambient.",
+        "acceptance": "Compare measured deviation and settling to the system transient requirement, which must be defined before hardware approval."
+      }
+    ]
+  }
+}

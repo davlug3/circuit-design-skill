@@ -94,6 +94,13 @@ KICAD_PINS: dict[str, dict[str, tuple[float, float, int, float]]] = {
     "PNP": {"1": (0.0, 5.08, 270, 2.54), "2": (-5.08, 0.0, 0, 2.54), "3": (0.0, -5.08, 90, 2.54)},
     "NMOS": {"1": (0.0, 5.08, 270, 2.54), "2": (-5.08, 0.0, 0, 2.54), "3": (0.0, -5.08, 90, 2.54)},
     "PMOS": {"1": (0.0, 5.08, 270, 2.54), "2": (-5.08, 0.0, 0, 2.54), "3": (0.0, -5.08, 90, 2.54)},
+    "TPS5430": {
+        "1": (-8.89, 7.62, 0, 2.54), "2": (-8.89, 2.54, 0, 2.54),
+        "3": (-8.89, -2.54, 0, 2.54), "4": (-8.89, -7.62, 0, 2.54),
+        "5": (8.89, -7.62, 180, 2.54), "6": (8.89, -2.54, 180, 2.54),
+        "7": (8.89, 2.54, 180, 2.54), "8": (8.89, 7.62, 180, 2.54),
+        "9": (0.0, -12.7, 90, 2.54),
+    },
     "OPAMP": {
         "1": (-7.62, 2.54, 0, 2.54),
         "2": (-7.62, -2.54, 0, 2.54),
@@ -115,6 +122,24 @@ KICAD_PINS: dict[str, dict[str, tuple[float, float, int, float]]] = {
         "1": (0.0, 3.81, 270, 1.27), "2": (0.0, -3.81, 90, 1.27),
         "3": (-5.08, 1.27, 0, 2.54), "4": (-5.08, -1.27, 0, 2.54),
     },
+    # Generic 8-pin package symbol. Pins are numbered, not assigned functions.
+    "IC8": {
+        "1": (-7.62, 3.81, 0, 2.54), "2": (-7.62, 1.27, 0, 2.54),
+        "3": (-7.62, -1.27, 0, 2.54), "4": (-7.62, -3.81, 0, 2.54),
+        "5": (7.62, -3.81, 180, 2.54), "6": (7.62, -1.27, 180, 2.54),
+        "7": (7.62, 1.27, 180, 2.54), "8": (7.62, 3.81, 180, 2.54),
+    },
+}
+
+
+KICAD_PIN_NAMES: dict[str, dict[str, str]] = {
+    "TPS5430": {"1": "BOOT", "2": "NC", "3": "NC", "4": "VSENSE",
+                "5": "ENA", "6": "GND", "7": "VIN", "8": "PH", "9": "DAP"},
+}
+KICAD_PIN_TYPES: dict[str, dict[str, str]] = {
+    "TPS5430": {"1": "input", "2": "no_connect", "3": "no_connect",
+                "4": "input", "5": "input", "6": "power_in",
+                "7": "power_in", "8": "output", "9": "passive"},
 }
 
 
@@ -211,7 +236,7 @@ def _lib_symbol(ctype: str) -> str:
         "R": "R", "C": "C", "L": "L", "V": "V", "I": "I",
         "D": "D", "LED": "D", "ZENER": "D",
         "NPN": "Q", "PNP": "Q", "NMOS": "M", "PMOS": "M",
-        "OPAMP": "U", "SW": "S", "E": "E", "G": "G",
+        "OPAMP": "U", "SW": "S", "E": "E", "G": "G", "IC8": "U", "TPS5430": "U",
     }[ctype]
     name = f"circuit:{ctype}"
     pins = KICAD_PINS[ctype]
@@ -255,9 +280,16 @@ def _lib_symbol(ctype: str) -> str:
             graphics.append(_poly([(-0.635, -1.27), (0, -0.635), (0.635, -1.27)]))
     elif ctype in ("SW", "E", "G"):
         graphics.append(_rect(-2.54, -2.54, 2.54, 2.54))
+    elif ctype == "IC8":
+        graphics.append(_rect(-5.08, -6.35, 5.08, 6.35))
+    elif ctype == "TPS5430":
+        graphics += [_rect(-6.35, -10.16, 6.35, 10.16),
+                     _rect(-2.54, -2.54, 2.54, 2.54)]
 
+    pin_names = KICAD_PIN_NAMES.get(ctype, {})
+    pin_types = KICAD_PIN_TYPES.get(ctype, {})
     pin_text = "\n".join(
-        _pin(num, "~", x, y, angle, length)
+        _pin(num, pin_names.get(num, "~"), x, y, angle, length, pin_types.get(num, "passive"))
         for num, (x, y, angle, length) in pins.items()
     )
     unit_graphics = "\n".join(graphics)
