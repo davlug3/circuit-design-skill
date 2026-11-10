@@ -409,6 +409,12 @@ def normalize_component(comp: dict[str, Any]) -> tuple[dict[str, Any], list[str]
                 or float(tolerance) < 0 or float(tolerance) >= 100):
             raise ValueError(f"{ref}: tolerance_percent must be finite and in [0, 100)")
         out["tolerance_percent"] = float(tolerance)
+    if out.get("footprint_status") not in (None, "verified", "provisional", "unassigned"):
+        raise ValueError(f"{ref}: footprint_status must be verified, provisional, or unassigned")
+    if "pad_map_verified" in out and not isinstance(out["pad_map_verified"], bool):
+        raise ValueError(f"{ref}: pad_map_verified must be boolean")
+    if out.get("pad_map_verified") and not out.get("footprint_evidence"):
+        raise ValueError(f"{ref}: verified pad map requires footprint_evidence")
     for key in ("dc", "ac", "gain", "rout"):
         if key in comp:
             out[key] = float(comp[key])
