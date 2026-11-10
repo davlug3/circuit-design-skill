@@ -29,6 +29,30 @@ class TestVerifyExamples(unittest.TestCase):
             self.assertIn("rc_corner", names)
             self.assertTrue((Path(td) / "rc_lowpass-verification.json").exists())
 
+    def test_pcb_drc_is_skipped_without_actual_board_and_required_gate_fails(self):
+        with tempfile.TemporaryDirectory() as td:
+            result = verify.verify(EXAMPLES / "rc-lowpass.json", td, required=["pcb-drc"])
+            check = next(c for c in result["checks"] if c["name"] == "kicad_pcb_drc")
+            self.assertIsNone(check["ok"])
+            required = next(c for c in result["checks"] if c["name"] == "required:pcb-drc")
+            self.assertFalse(required["ok"])
+            self.assertFalse(result["ok"])
+
+    def test_pcb_drc_runs_on_actual_board(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td)
+            board = out / "sample.kicad_pcb"
+            board.write_text("(kicad_pcb (version 20241229))")
+            with patch.object(verify.env_probe, "probe_kicad_cli",
+                              return_value={"supported": True, "path": "/usr/bin/kicad-cli"}), \\
+                 patch.object(verify.subprocess, "run",
+                              return_value=SimpleNamespace(returncode=0, stdout="", stderr="")) as run:
+                check = verify.check_kicad_pcb_drc(board, out)
+            self.assertTrue(check.ok, check.detail)
+            self.assertEqual(run.call_args.args[0][1:3], ["pcb", "drc"])
+
     def test_operating_limits_pass_and_fail(self):
         spec = {"design": {"operating_limits": [{
             "id": "L1", "parameter": "junction temperature", "value": 105,
