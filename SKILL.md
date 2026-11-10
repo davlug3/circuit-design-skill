@@ -139,3 +139,14 @@ Run tests after modifying implementation code:
 ```bash
 python3 -m unittest discover -s tests -v
 ```
+
+### End-to-end native PCB generation
+
+When the user requests the complete KiCad project and board, use
+scripts/full_design.py after the normalized circuit spec is ready. Ask for
+board dimensions and assembly style if they are not already specified, then
+invoke the sibling pcb-design-skill pipeline. The orchestrator passes the
+generated SPICE netlist, pin map and node aliases as the electrical source of
+truth. Do not claim a native board exists unless the pipeline actually writes
+the .kicad_pcb and .kicad_pro files. Treat a non-zero pipeline result as an
+incomplete release and inspect its gate report.

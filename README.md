@@ -454,3 +454,28 @@ MIT. See `LICENSE`.
 ## DIY-first footprint research
 
 Before assigning an IC or semiconductor footprint, research the exact manufacturer's package options for the selected MPN. Prefer suitable through-hole packages, then larger-pitch hand-solderable SMD. Do not infer package families from component type. See `references/footprint-research.md`.
+
+## End-to-end KiCad project and PCB
+
+Use the orchestrator when you want the circuit and physical board in one run.
+It generates the schematic, SPICE netlist, BOM and PCB handoff, then calls the
+sibling pcb-design-skill pipeline to build the native KiCad project, place
+footprints, route, run DRC/DFM and export fabrication files.
+
+    python3 scripts/full_design.py specs/design.json \
+      --board 50x40 --assembly through-hole \
+      --pcb-skill ../pcb-design-skill --backend auto --out out/design
+
+Set PCB_DESIGN_SKILL instead of passing --pcb-skill when the sibling skill is
+installed elsewhere. Board dimensions and assembly style are explicit because
+they affect mechanical fit and footprint selection. Select a board-class
+profile appropriate to voltage, speed, impedance and safety requirements;
+the default 2-layer profile is only for ordinary low-speed boards.
+
+Outputs are split into out/design/generated/ (schematic, SPICE, BOM,
+verification and PCB handoff) and out/design/pcb/ (native .kicad_pcb,
+.kicad_pro, route/check reports and fabrication exports). The command returns
+non-zero when PCB release gates fail. A board is not called fabrication-ready
+unless the PCB report says all required gates and sign-offs passed. Missing or
+provisional footprints, generic SPICE models, skipped simulation, ERC/DRC
+failures and required human reviews remain explicit blockers.
