@@ -148,5 +148,5 @@ board dimensions and assembly style if they are not already specified, then
 invoke the sibling pcb-design-skill pipeline. The orchestrator passes the
 generated SPICE netlist, pin map and node aliases as the electrical source of
 truth. Do not claim a native board exists unless the pipeline actually writes
-the .kicad_pcb and .kicad_pro files. Treat a non-zero pipeline result as an
+the .kicad_pcb and .kicad_pro files. The current orchestrator uses the local PCB backend because the sibling repository's CI cannot access temporary files generated in this repository; cross-repository CI orchestration is not yet implemented. Treat a non-zero pipeline result as an
 incomplete release and inspect its gate report.

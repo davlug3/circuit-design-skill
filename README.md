@@ -464,13 +464,15 @@ footprints, route, run DRC/DFM and export fabrication files.
 
     python3 scripts/full_design.py specs/design.json \
       --board 50x40 --assembly through-hole \
-      --pcb-skill ../pcb-design-skill --backend auto --out out/design
+      --pcb-skill ../pcb-design-skill --backend local --out out/design
 
 Set PCB_DESIGN_SKILL instead of passing --pcb-skill when the sibling skill is
 installed elsewhere. Board dimensions and assembly style are explicit because
 they affect mechanical fit and footprint selection. Select a board-class
 profile appropriate to voltage, speed, impedance and safety requirements;
 the default 2-layer profile is only for ordinary low-speed boards.
+
+The current orchestrator runs the sibling PCB pipeline locally: its CI workflow cannot read temporary handoff files outside the PCB repository. Run it on a machine with the PCB skill's KiCad 9, pcbnew, Java 25 and Freerouting dependencies installed. CI orchestration across the two repositories is a follow-up integration.
 
 Outputs are split into out/design/generated/ (schematic, SPICE, BOM,
 verification and PCB handoff) and out/design/pcb/ (native .kicad_pcb,
