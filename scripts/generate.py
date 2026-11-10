@@ -674,20 +674,27 @@ def bom_rows(spec: dict[str, Any]) -> list[dict[str, str]]:
     groups: dict[tuple[str, str, str, str], list[str]] = {}
     for comp in spec["components"]:
         key = (
-            comp["type"],
-            _bom_value(comp),
-            comp.get("footprint", ""),
-            comp.get("notes", ""),
+            comp["type"], _bom_value(comp), comp.get("footprint", ""),
+            comp.get("notes", ""), comp.get("manufacturer", ""),
+            comp.get("mpn", ""), comp.get("package", ""),
+            comp.get("datasheet_url", ""), comp.get("datasheet_revision", ""),
+            comp.get("sourcing_url", ""), comp.get("footprint_status", "unassigned"),
+            comp.get("footprint_evidence", ""), str(comp.get("pad_map_verified", False)),
         )
         groups.setdefault(key, []).append(comp["ref"])
     rows = []
-    for (ctype, value, footprint, notes), refs in sorted(groups.items(), key=lambda kv: kv[1][0]):
+    for (key, refs) in sorted(groups.items(), key=lambda kv: kv[1][0]):
+        (ctype, value, footprint, notes, manufacturer, mpn, package,
+         datasheet_url, datasheet_revision, sourcing_url, footprint_status,
+         footprint_evidence, pad_map_verified) = key
         rows.append({
-            "References": " ".join(refs),
-            "Qty": str(len(refs)),
-            "Type": _TYPE_NAMES.get(ctype, ctype),
-            "Value": value,
-            "Footprint": footprint,
+            "References": " ".join(refs), "Qty": str(len(refs)),
+            "Type": _TYPE_NAMES.get(ctype, ctype), "Value": value,
+            "Manufacturer": manufacturer, "MPN": mpn, "Package": package,
+            "Footprint": footprint, "Footprint status": footprint_status,
+            "Pad map verified": pad_map_verified,
+            "Datasheet URL": datasheet_url, "Datasheet revision": datasheet_revision,
+            "Sourcing URL": sourcing_url, "Footprint evidence": footprint_evidence,
             "Notes": notes,
         })
     return rows
