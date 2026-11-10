@@ -216,9 +216,26 @@ accepting it. See `references/optimization.md`.
 
 ### 5. Generate
 
-For KiCad or PCB outputs, use the assembly-aware wrapper. It asks whether the
-design is primarily SMD or through-hole, then fills only missing footprints
-with conservative common defaults before calling the normal generator:
+For KiCad or PCB outputs, **research footprints before assigning them**. Follow
+`references/footprint-research.md`: search the exact MPN and datasheet package
+drawing first; for generic parts, search for the component class, power rating
+and KiCad footprint (for example, `KiCad common footprint 0.5 W axial resistor`).
+Prefer manufacturer mechanical drawings, then the official KiCad library/KLC;
+use forums only as secondary evidence of common practice. Match body size, lead
+pitch, pad/drill dimensions, orientation and pin numbering. Record the source
+URL and selected footprint in the spec/research log. If exact fit is uncertain,
+mark it provisional or leave it unassigned—do not present a generic default as
+datasheet-verified.
+
+For a 0.5 W through-hole axial resistor, a common candidate is
+`Resistor_THT:R_Axial_DIN0309_L9.0mm_D3.2mm_P12.70mm_Horizontal`, whose KiCad
+library description identifies a DIN0309 9.0 x 3.2 mm body and 12.70 mm pitch.
+Confirm those dimensions against the actual resistor datasheet; 0.5 W alone
+does not uniquely determine body size or lead spacing.
+
+After research, use the assembly-aware wrapper. It asks whether the design is
+primarily SMD or through-hole, then fills only missing footprints with offline
+fallback defaults before calling the normal generator:
 
 ```bash
 python3 scripts/generate_with_footprints.py specs/rc.json --out out/
@@ -227,16 +244,16 @@ python3 scripts/generate_with_footprints.py specs/rc.json --out out/ --assembly 
 python3 scripts/generate_with_footprints.py specs/rc.json --out out/ --assembly through-hole
 ```
 
-Through-hole is the preferred default (press Enter at the prompt). The
-wrapper assigns common resistor, capacitor, inductor, diode, zener, LED, BJT,
-MOSFET and op-amp footprints. SMD equivalents are available when selected.
-For ICs and transistors, it selects a common first-choice package (DIP-8 /
-SOIC-8, TO-92 / TO-220 / SOT-23) based on device class, not the exact
-manufacturer part. These are provisional layout defaults: verify the actual
-package, dimensions, polarity and pad numbering against the part datasheet
-before fabrication. Existing explicit footprints are preserved. Logical SPICE
-pins are not physical package pads; pin maps remain a separate, datasheet-backed
-decision.
+Through-hole is the preferred default (press Enter at the prompt). The wrapper's
+built-in mappings are offline fallbacks only; it is not a substitute for the
+research workflow above. It assigns common resistor, capacitor, inductor, diode,
+zener, LED, BJT, MOSFET and op-amp footprints only where the spec has no explicit
+footprint. For ICs and transistors, package class defaults (DIP-8 / SOIC-8,
+TO-92 / TO-220 / SOT-23) are provisional and must be checked against the exact
+manufacturer package drawing and pinout. Existing explicit, research-backed
+footprints are preserved. Logical SPICE pins are not physical package pads;
+pin maps remain a separate, datasheet-backed decision. See
+`references/footprint-research.md`.
 
 ```bash
 python3 scripts/generate_with_footprints.py specs/rc.json --out out/
