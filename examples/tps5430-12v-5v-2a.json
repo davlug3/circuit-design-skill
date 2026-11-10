@@ -236,6 +236,58 @@
         "document": "SLVS632",
         "accessed": "2026-11-10"
       }
+    ],
+    "measurements": [
+      {
+        "id": "M1",
+        "requirement": "R1",
+        "test_point": "VIN at input connector and C1",
+        "quantity": "Input DC voltage",
+        "method": "Measure with a calibrated DMM before enabling the converter and during steady-state operation.",
+        "equipment": "Current-limited bench supply and DMM",
+        "conditions": "Nominal 12 V input; record startup and steady-state values.",
+        "acceptance": "Must remain within the final specified input operating and transient envelope; numeric limits must be fixed before hardware approval."
+      },
+      {
+        "id": "M2",
+        "requirement": "R1",
+        "test_point": "OUT at C3",
+        "quantity": "Output DC voltage and load regulation",
+        "method": "Measure at no load and at 0.5 A, 1 A, and 2 A after thermal steady state.",
+        "equipment": "Electronic load and calibrated DMM",
+        "conditions": "VIN = 12 V nominal; record ambient temperature and load current.",
+        "acceptance": "Compare against a formally specified output tolerance; the tolerance is not yet established by this reference study."
+      },
+      {
+        "id": "M3",
+        "requirement": "R2",
+        "test_point": "SW and OUT at C3",
+        "quantity": "Switch-node waveform and output ripple",
+        "method": "Capture switching waveform and output ripple using short probe grounds and suitable bandwidth limiting.",
+        "equipment": "Oscilloscope, low-inductance probe, electronic load",
+        "conditions": "VIN = 12 V; IOUT = 2 A; steady state.",
+        "acceptance": "Compare against sourced device and system limits after the measurement bandwidth and numeric ripple limits are defined."
+      },
+      {
+        "id": "M4",
+        "requirement": "R2",
+        "test_point": "U1, D1, L1, C1, and C3",
+        "quantity": "Component temperatures",
+        "method": "Measure case/surface temperatures after thermal equilibrium.",
+        "equipment": "Thermal camera or attached thermocouples",
+        "conditions": "VIN = 12 V; IOUT = 2 A; worst-case specified ambient and enclosure conditions.",
+        "acceptance": "All selected components must remain within derated datasheet limits; exact parts and numeric limits are still open."
+      },
+      {
+        "id": "M5",
+        "requirement": "R2",
+        "test_point": "OUT at C3",
+        "quantity": "Load-step transient response",
+        "method": "Apply a controlled 0.5 A to 2 A load step and capture output deviation and settling.",
+        "equipment": "Electronic load with transient mode and oscilloscope",
+        "conditions": "VIN = 12 V; step from 0.5 A to 2 A; record slew rate and ambient.",
+        "acceptance": "Compare measured deviation and settling to the system transient requirement, which must be defined before hardware approval."
+      }
     ]
   }
 }
