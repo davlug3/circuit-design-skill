@@ -4,7 +4,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from generate_with_footprints import assign_common_footprints
+from generate_with_footprints import assign_common_footprints, semiconductor_refs_requiring_research
 
 
 class TestCommonFootprints(unittest.TestCase):
@@ -26,6 +26,7 @@ class TestCommonFootprints(unittest.TestCase):
         self.assertNotIn("Q1", assigned)
         self.assertNotIn("U1", assigned)
         self.assertEqual(spec["components"][0]["footprint_status"], "provisional")
+        self.assertEqual(semiconductor_refs_requiring_research(spec), ["D1", "LED1", "Q1", "U1"])
         self.assertFalse(spec["components"][0]["pad_map_verified"])
 
     def test_through_hole_defaults(self):
@@ -37,7 +38,8 @@ class TestCommonFootprints(unittest.TestCase):
             {"ref": "U1", "type": "OPAMP"},
         ]}
         assigned = assign_common_footprints(spec, "through-hole")
-        self.assertIn("P7.62mm", assigned["R1"])
+        self.assertIn("P12.70mm", assigned["R1"])
+        self.assertIn("DIN0309", assigned["R1"])
         self.assertNotIn("LED1", assigned)
         self.assertIn("L1", assigned)
         self.assertNotIn("Q1", assigned)
@@ -49,6 +51,7 @@ class TestCommonFootprints(unittest.TestCase):
         ]}
         self.assertEqual(assign_common_footprints(spec, "smd"), {})
         self.assertEqual(spec["components"][0]["footprint"], "MyLibrary:Custom_R")
+        self.assertEqual(semiconductor_refs_requiring_research(spec), [])
 
     def test_invalid_assembly_is_rejected(self):
         with self.assertRaises(ValueError):

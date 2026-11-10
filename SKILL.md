@@ -54,6 +54,8 @@ Create a requirements table with unique IDs, measurable acceptance limits, opera
 
 Use manufacturer primary sources first. Check operating range, absolute maximum ratings, derating, package, pinout, thermal impedance, lifecycle, availability, and second sources. For every critical part, record exact MPN, manufacturer, package, datasheet revision/URL, and rationale. Use `references/electronics-research.md`, `references/part-selection.md`, and `references/models.md`.
 
+For ICs and all semiconductors, follow `references/footprint-research.md`: research the exact MPN's manufacturer-offered package variants first, then choose the most DIY-friendly electrically suitable option. Prefer through-hole where offered; otherwise prefer larger-pitch, hand-solderable packages. Never infer TO-92, TO-220, DIP or SOT packages from a generic device class. Leave the footprint unassigned until evidence exists.
+
 ### 3. Specification and calculations
 
 Create and validate a normalized JSON spec using `schemas/design-spec.schema.json`. The component list and connectivity are authoritative. Use `scripts/circuit_calc.py`, `scripts/optimize.py` where applicable, and `scripts/mna.py`; do not substitute hand-waving arithmetic. Include tolerance and worst-case analysis, source/load interaction, derating, thermal rise, and startup/fault conditions.

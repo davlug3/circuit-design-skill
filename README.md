@@ -449,3 +449,8 @@ installed.
 ## License
 
 MIT. See `LICENSE`.
+
+
+## DIY-first footprint research
+
+Before assigning an IC or semiconductor footprint, research the exact manufacturer's package options for the selected MPN. Prefer suitable through-hole packages, then larger-pitch hand-solderable SMD. Do not infer package families from component type. See `references/footprint-research.md`.

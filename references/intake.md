@@ -1,5 +1,7 @@
 # Design intake
 
+Use conversational questions, one important unknown at a time. Ask about assembly preference (through-hole/SMD), DIY soldering ability, board size, layers, connectors, mounting and cost when relevant. Common non-critical defaults may be proposed but must be recorded; never guess safety-critical, electrical, pinout or mechanical requirements.
+
 Ask before designing. A circuit is a set of coupled trade-offs, and the
 "obvious" values are often wrong by an order of magnitude. The questions below
 are grouped so a user can answer quickly, and each one maps to a field in

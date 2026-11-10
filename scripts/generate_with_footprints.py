@@ -22,11 +22,24 @@ FOOTPRINTS = {
         "L": "Inductor_SMD:L_0805_2012Metric",
     },
     "through-hole": {
-        "R": "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+        "R": "Resistor_THT:R_Axial_DIN0309_L9.0mm_D3.2mm_P12.70mm_Horizontal",
         "C": "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm",
         "L": "Inductor_THT:L_Radial_D10.0mm_P5.00mm",
     },
 }
+
+
+# Never infer semiconductor packages from device class. Research exact MPN options.
+SEMICONDUCTOR_TYPES = {
+    "D", "LED", "ZENER", "NPN", "PNP", "NMOS", "PMOS", "OPAMP",
+    "IC", "BJT", "MOSFET", "JFET", "IGBT", "SCR", "TRIAC", "TVS",
+    "SCHOTTKY", "RECTIFIER", "BRIDGE", "REGULATOR", "MCU", "ADC", "DAC",
+}
+
+
+def semiconductor_refs_requiring_research(spec: dict[str, Any]) -> list[str]:
+    return [str(c.get("ref", "")) for c in spec.get("components", [])
+            if c.get("type") in SEMICONDUCTOR_TYPES and not c.get("footprint")]
 
 
 def assign_common_footprints(spec: dict[str, Any], assembly: str) -> dict[str, str]:
@@ -110,6 +123,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
 
     spec = json.loads(spec_path.read_text(encoding="utf-8"))
+    semiconductor_todo = semiconductor_refs_requiring_research(spec)
     assigned = assign_common_footprints(spec, assembly)
     if assigned:
         print(f"Assembly profile: {assembly}")
@@ -118,6 +132,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {ref}: {footprint}")
     else:
         print(f"Assembly profile: {assembly}; no safe default assignments found.")
+
+    if semiconductor_todo:
+        print("Semiconductor footprints require manufacturer-package research:")
+        for ref in semiconductor_todo:
+            print(f"  {ref}: research exact MPN package options; prefer DIY-friendly through-hole")
 
     # Keep the temporary spec beside the original so relative model paths remain valid.
     with tempfile.NamedTemporaryFile(
