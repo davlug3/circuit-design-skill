@@ -1151,9 +1151,9 @@ def check_kicad_pcb_drc(board: Path, out: Path) -> Check:
     if not board.exists():
         return Check("kicad_pcb_drc", None,
                      f"actual PCB file not found ({board.name}); PCB handoff is not a board")
-    capability = env_probe.probe_kicad_cli()
+    capability = env_probe.probe_kicad_pcb_drc()
     if not capability.get("supported"):
-        detail = capability.get("detail", "kicad-cli is unavailable or incompatible")
+        detail = capability.get("detail", "kicad-cli PCB DRC is unavailable or incompatible")
         return Check("kicad_pcb_drc", None, f"PCB DRC was not run: {detail}")
     exe = capability.get("path")
     report = out / f"{board.stem}-drc.rpt"
