@@ -119,6 +119,48 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+  pcb-integration:
+    name: End-to-end native PCB generation
+    needs: tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Check out the PCB design skill
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: davlug3/pcb-design-skill
+          path: pcb-design-skill
+
+      - name: Run full circuit-to-KiCad integration in KiCad 9
+        run: |
+          set -euo pipefail
+          docker run --rm --user root \
+            -v "${GITHUB_WORKSPACE}:/work" -w /work \
+            -e HOME=/tmp -e GITHUB_ACTIONS=true \
+            kicad/kicad:9.0 bash -lc '
+              set -euo pipefail
+              apt-get update
+              apt-get install --yes --no-install-recommends python3-pip
+              python3 -m pip install --break-system-packages --no-cache-dir kiutils
+              if ! python3 -c "import pcbnew" 2>/dev/null; then
+                PCB_DIR=$(dirname "$(find /usr -name pcbnew.py 2>/dev/null | head -1)")
+                if [ -n "${PCB_DIR}" ] && [ -d "${PCB_DIR}" ]; then
+                  export PYTHONPATH="${PCB_DIR}:${PYTHONPATH:-}"
+                fi
+              fi
+              python3 -c "import pcbnew; print(\"pcbnew\", pcbnew.GetBuildVersion())"
+              python3 scripts/full_design.py examples/rc-lowpass-pcb.json \
+                --pcb-skill /work/pcb-design-skill \
+                --board 30x20 --assembly smd --no-ask --skip-route \
+                --allow-unverified --out out/full-design-ci
+              test -s out/full-design-ci/generated/rc_lowpass_pcb.kicad_sch
+              test -s out/full-design-ci/generated/rc_lowpass_pcb.cir
+              test -s out/full-design-ci/pcb/rc_lowpass_pcb.kicad_pcb
+              test -s out/full-design-ci/pcb/rc_lowpass_pcb.kicad_pro
+              test -s out/full-design-ci/pcb/report/design-report.json
+            '
+
   verify:
     name: Generate and verify
     needs: tests

@@ -29,6 +29,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--layers", type=int, default=2, choices=(2, 4, 6))
     parser.add_argument("--profile", default="2layer-low-speed")
     parser.add_argument("--assembly", required=True, choices=("through-hole", "smd"))
+    parser.add_argument("--skip-route", action="store_true",
+                        help="skip Freerouting; still build, check and export the native board")
     parser.add_argument("--backend", choices=("local",), default="local",
                         help="PCB integration runs locally; sibling CI cannot access temporary handoff files")
     parser.add_argument("--ask", action=argparse.BooleanOptionalAction, default=None)
@@ -89,6 +91,8 @@ def main(argv: list[str] | None = None) -> int:
         pipeline.append("--ask" if args.ask else "--no-ask")
     if args.ask_mobile:
         pipeline.append("--ask-mobile")
+    if args.skip_route:
+        pipeline.append("--skip-route")
     if args.allow_unverified:
         pipeline.append("--allow-unverified")
 
