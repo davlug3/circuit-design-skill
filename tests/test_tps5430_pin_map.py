@@ -28,6 +28,7 @@ class TestTPS5430PinMap(unittest.TestCase):
                 "6": "GND",
                 "7": "VIN",
                 "8": "PH",
+                "9": "DAP",
             },
         )
 
@@ -43,7 +44,7 @@ class TestTPS5430PinMap(unittest.TestCase):
     def test_mapping_does_not_claim_electrical_or_hardware_validation(self):
         mapping = json.loads(PIN_MAP.read_text(encoding="utf-8"))
         limitations = " ".join(mapping["limitations"]).lower()
-        self.assertIn("numbered pins only", limitations)
+        self.assertIn("internal placeholder", limitations)
         self.assertIn("electrical simulation", limitations)
         self.assertIn("hardware readiness", limitations)
 
