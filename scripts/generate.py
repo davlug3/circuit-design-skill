@@ -557,14 +557,6 @@ def kicad_schematic(spec: dict[str, Any], *, version: str = "20250114") -> str:
     norm = spec
     root = uid(norm["name"], "root")
     positions = _kicad_layout(norm["components"])
-    # A compact, readable reference-study layout; the component list remains
-    # the electrical source of truth and labels still define exact connectivity.
-    if norm["name"] == "tps5430-12v-to-5v-2a-reference":
-        positions = {
-            "C1": (63.5, 76.2), "C2": (101.6, 63.5), "U1": (139.7, 101.6),
-            "D1": (139.7, 152.4), "L1": (190.5, 152.4), "C3": (241.3, 152.4),
-            "R1": (241.3, 63.5), "R2": (241.3, 114.3),
-        }
     types = [c["type"] for c in norm["components"]]
 
     out = [
