@@ -140,7 +140,9 @@ jobs:
             -e HOME=/tmp -e GITHUB_ACTIONS=true \
             kicad/kicad:9.0 bash -lc '
               set -euo pipefail
-              python3 -m pip install --break-system-packages kiutils
+              apt-get update
+              apt-get install --yes --no-install-recommends python3-pip
+              python3 -m pip install --break-system-packages --no-cache-dir kiutils
               if ! python3 -c "import pcbnew" 2>/dev/null; then
                 PCB_DIR=$(dirname "$(find /usr -name pcbnew.py 2>/dev/null | head -1)")
                 if [ -n "${PCB_DIR}" ] && [ -d "${PCB_DIR}" ]; then
