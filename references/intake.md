@@ -1,19 +1,26 @@
 # Design intake
 
-Ask before designing. A circuit is a set of coupled trade-offs, and the
-"obvious" values are often wrong by an order of magnitude. The questions below
-are grouped so a user can answer quickly, and each one maps to a field in
-`schemas/design-spec.schema.json`.
+Start from the user's natural-language goal and conduct a concise, interactive
+intake. Ask for the specifications and preferences that determine topology,
+performance, safety, physical build and cost. Do not force the user to know
+engineering terminology: translate choices into plain language and offer
+sensible options.
 
-If the user cannot answer a question, propose a default **and record it in
-`assumptions`**. Never leave a hidden assumption in the netlist.
+For unanswered non-critical details, assume only conventional, commonly used
+values or practices and record them in `assumptions` with rationale and
+confidence. Do not invent requirements, safety limits, loads, supplies, pinouts,
+or critical operating conditions. Ask follow-up questions whenever uncertainty
+could change circuit function, safety or feasibility. The user can revise
+assumptions at any point.
 
-## 0. Defaults confirmation gate
+## 0. Assumption policy
 
-Before creating specs, handoffs, or generated artifacts, restate the locked
-defaults and assumptions and get explicit confirmation (e.g. `defaults
-confirmed`) or a list of changes. Do not silently lock revision/topology,
-power, bypass, build form factor, anchor source, or unverified substitutions.
+Before generation, summarize the selected architecture and assumptions in
+plain language and invite corrections. Ordinary defaults do not need a separate
+confirmation turn. Explicitly ask before deciding any missing item that changes
+safety, topology, supply/load compatibility, isolation, user-facing behavior,
+critical performance, target revision or a non-equivalent substitution. Never
+silently substitute an unverified component.
 
 ## 1. Function and topology
 
@@ -121,15 +128,19 @@ the PCB skill will ask. See `references/pcb-handoff.md`.
 
 ## Minimum viable intake
 
-If the user wants speed, ask only these five:
+Start with a short conversational prompt covering:
 
-1. What does it need to do, and what are input and output?
-2. What supply voltage(s) are available?
-3. What load must it drive?
-4. What accuracy/bandwidth/current is required?
-5. Which deliverables (SPICE, LTspice, KiCad, BOM, report, PCB handoff)?
+1. What should the circuit do? Describe inputs, outputs and expected behavior.
+2. What power source and output load are available, if known?
+3. What performance matters most (voltage/current, speed/bandwidth, accuracy, noise, efficiency)?
+4. What build preferences matter (through-hole vs SMD, board size, connectors, cost, availability)?
+5. Any enclosure, environment, compliance or safety constraints?
 
-Then state the remaining assumptions explicitly and proceed.
+Ask only the follow-up questions needed to resolve consequential unknowns. If
+answers are unavailable, use common defaults only where safe and record them.
+The standard output is the complete KiCad project, schematic, PCB, BOM and
+SPICE netlist; ask whether the user wants additional LTspice/report formats or
+has constraints on the PCB.
 
 ## Turning answers into a spec
 
