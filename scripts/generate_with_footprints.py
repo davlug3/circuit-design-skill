@@ -51,6 +51,12 @@ def assign_common_footprints(spec: dict[str, Any], assembly: str) -> dict[str, s
 
 
 def _needs_footprints(spec_path: Path, args: list[str]) -> bool:
+    # Explicit PCB options make this a PCB-generation run even when the spec's
+    # deliverables list does not include "pcb".
+    if any(arg == option or arg.startswith(option + "=")
+           for arg in args
+           for option in ("--pcb-board", "--pcb-profile", "--pcb-layers")):
+        return True
     requested = None
     for index, arg in enumerate(args):
         if arg == "--formats" and index + 1 < len(args):
