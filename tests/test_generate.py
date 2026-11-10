@@ -130,6 +130,32 @@ class TestGenerateRC(unittest.TestCase):
         text = (self.out / f"{self.name}-bom.csv").read_text()
         self.assertIn("R1", text)
         self.assertIn("C1", text)
+        self.assertIn("Manufacturer,MPN,Package", text)
+        self.assertIn("Footprint status", text)
+
+    def test_bom_carries_sourcing_and_footprint_evidence(self):
+        spec = json.loads(self.spec_path.read_text())
+        resistor = next(item for item in spec["components"] if item["ref"] == "R1")
+        resistor.update({
+            "manufacturer": "Example Semiconductor",
+            "mpn": "EX-123",
+            "package": "0805",
+            "datasheet_url": "https://example.com/ds.pdf",
+            "datasheet_revision": "Rev A",
+            "sourcing_url": "https://example.com/buy",
+            "footprint": "Resistor_SMD:R_0805_2012Metric",
+            "footprint_status": "provisional",
+            "footprint_evidence": "Generic passive starting footprint",
+            "pad_map_verified": False,
+        })
+        path = self.out / "sourced.json"
+        path.write_text(json.dumps(spec))
+        result = generate.generate(path, self.out)
+        bom = (self.out / result["files"]["bom"]).read_text()
+        self.assertIn("Example Semiconductor", bom)
+        self.assertIn("EX-123", bom)
+        self.assertIn("https://example.com/ds.pdf", bom)
+        self.assertIn("provisional", bom)
 
     def test_report(self):
         text = (self.out / f"{self.name}-report.md").read_text()
