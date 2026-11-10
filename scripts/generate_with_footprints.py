@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+"""Prompt for an assembly style, assign conservative common KiCad footprints,
+then delegate all artifact generation to generate.py.
+
+Existing per-component footprint choices are never overwritten. Packages whose
+size or pinout cannot be inferred safely are deliberately left unassigned.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import tempfile
+from pathlib import Path
+from typing import Any
+
+# KiCad library identifiers are deliberately conservative defaults.
+FOOTPRINTS = {
+    "smd": {
+        "R": "Resistor_SMD:R_0805_2012Metric",
+        "C": "Capacitor_SMD:C_0805_2012Metric",
+        "L": "Inductor_SMD:L_0805_2012Metric",
+        "D": "Diode_SMD:D_SOD-123",
+        "LED": "LED_SMD:LED_0805_2012Metric",
+        "ZENER": "Diode_SMD:D_SOD-123",
+    },
+    "through-hole": {
+        "R": "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+        "C": "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm",
+        "D": "Diode_THT:D_DO-41_SOD81_P10.16mm_Horizontal",
+        "LED": "LED_THT:LED_D3.0mm",
+        "ZENER": "Diode_THT:D_DO-41_SOD81_P10.16mm_Horizontal",
+    },
+}
+
+
+def assign_common_footprints(spec: dict[str, Any], assembly: str) -> dict[str, str]:
+    """Fill missing component footprints; return ref -> assigned footprint."""
+    if assembly not in FOOTPRINTS:
+        raise ValueError("assembly must be 'smd' or 'through-hole'")
+    defaults = FOOTPRINTS[assembly]
+    assigned: dict[str, str] = {}
+    for comp in spec.get("components", []):
+        ref = str(comp.get("ref", ""))
+        if comp.get("footprint") or comp.get("type") not in defaults:
+            continue
+        footprint = defaults[comp["type"]]
+        comp["footprint"] = footprint
+        assigned[ref] = footprint
+    return assigned
+
+
+def _needs_footprints(spec_path: Path, args: list[str]) -> bool:
+    requested = None
+    for index, arg in enumerate(args):
+        if arg == "--formats" and index + 1 < len(args):
+            requested = [x.strip() for x in args[index + 1].split(",") if x.strip()]
+        elif arg.startswith("--formats="):
+            requested = [x.strip() for x in arg.split("=", 1)[1].split(",") if x.strip()]
+    if requested is not None:
+        return bool({"kicad_sch", "pcb"} & set(requested))
+    spec = json.loads(spec_path.read_text(encoding="utf-8"))
+    return bool({"kicad_sch", "pcb"} & set(spec.get("deliverables", [])))
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--assembly", choices=("smd", "through-hole"))
+    options, passthrough = parser.parse_known_args(argv)
+    if "-h" in passthrough or "--help" in passthrough:
+        from generate import main as generate_main
+        sys.argv = ["generate.py", *passthrough]
+        return generate_main()
+    if not passthrough:
+        print("error: provide a design spec path", file=sys.stderr)
+        return 2
+
+    spec_path = Path(passthrough[0]).resolve()
+    if not _needs_footprints(spec_path, passthrough):
+        from generate import main as generate_main
+        sys.argv = ["generate.py", *passthrough]
+        return generate_main()
+
+    assembly = options.assembly
+    if assembly is None:
+        if not sys.stdin.isatty():
+            print(
+                "error: choose the primary assembly style with "
+                "--assembly smd or --assembly through-hole",
+                file=sys.stderr,
+            )
+            return 2
+        print("What is the primary assembly style?")
+        print("  1) SMD (surface-mount)")
+        print("  2) Through-hole")
+        answer = input("Select [1/2]: ").strip().lower()
+        choices = {"1": "smd", "s": "smd", "smd": "smd",
+                   "2": "through-hole", "t": "through-hole",
+                   "th": "through-hole", "through-hole": "through-hole"}
+        assembly = choices.get(answer)
+        if assembly is None:
+            print("error: enter 1 for SMD or 2 for through-hole", file=sys.stderr)
+            return 2
+
+    spec = json.loads(spec_path.read_text(encoding="utf-8"))
+    assigned = assign_common_footprints(spec, assembly)
+    if assigned:
+        print(f"Assembly profile: {assembly}")
+        print("Auto-assigned common footprints:")
+        for ref, footprint in assigned.items():
+            print(f"  {ref}: {footprint}")
+    else:
+        print(f"Assembly profile: {assembly}; no safe default assignments found.")
+
+    # Keep the temporary spec beside the original so relative model paths remain valid.
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", suffix=".json",
+        prefix=".footprints-", dir=spec_path.parent, delete=False,
+    ) as handle:
+        temp_path = Path(handle.name)
+        json.dump(spec, handle, indent=2)
+        handle.write("\n")
+    try:
+        passthrough[0] = str(temp_path)
+        from generate import main as generate_main
+        sys.argv = ["generate.py", *passthrough]
+        result = generate_main()
+        if assigned:
+            print(
+                "Note: inferred footprints are starting defaults only. "
+                "Verify package dimensions, polarity, pad numbering and datasheet pinouts."
+            )
+        return result
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
