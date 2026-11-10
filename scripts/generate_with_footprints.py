@@ -20,27 +20,11 @@ FOOTPRINTS = {
         "R": "Resistor_SMD:R_0805_2012Metric",
         "C": "Capacitor_SMD:C_0805_2012Metric",
         "L": "Inductor_SMD:L_0805_2012Metric",
-        "NPN": "Package_TO_SOT_SMD:SOT-23",
-        "PNP": "Package_TO_SOT_SMD:SOT-23",
-        "NMOS": "Package_TO_SOT_SMD:SOT-23",
-        "PMOS": "Package_TO_SOT_SMD:SOT-23",
-        "OPAMP": "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm",
-        "D": "Diode_SMD:D_SOD-123",
-        "LED": "LED_SMD:LED_0805_2012Metric",
-        "ZENER": "Diode_SMD:D_SOD-123",
     },
     "through-hole": {
         "R": "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
         "C": "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm",
         "L": "Inductor_THT:L_Radial_D10.0mm_P5.00mm",
-        "NPN": "Package_TO_SOT_THT:TO-92_Inline",
-        "PNP": "Package_TO_SOT_THT:TO-92_Inline",
-        "NMOS": "Package_TO_SOT_THT:TO-220-3_Vertical",
-        "PMOS": "Package_TO_SOT_THT:TO-220-3_Vertical",
-        "OPAMP": "Package_DIP:DIP-8_W7.62mm",
-        "D": "Diode_THT:D_DO-41_SOD81_P10.16mm_Horizontal",
-        "LED": "LED_THT:LED_D3.0mm",
-        "ZENER": "Diode_THT:D_DO-41_SOD81_P10.16mm_Horizontal",
     },
 }
 
@@ -57,6 +41,11 @@ def assign_common_footprints(spec: dict[str, Any], assembly: str) -> dict[str, s
             continue
         footprint = defaults[comp["type"]]
         comp["footprint"] = footprint
+        comp["footprint_status"] = "provisional"
+        comp["footprint_evidence"] = (
+            f"Generic {assembly} passive default; confirm dimensions against selected MPN."
+        )
+        comp["pad_map_verified"] = False
         assigned[ref] = footprint
     return assigned
 
@@ -145,8 +134,8 @@ def main(argv: list[str] | None = None) -> int:
         result = generate_main()
         if assigned:
             print(
-                "Note: inferred footprints are starting defaults only. "
-                "Verify package dimensions, polarity, pad numbering and datasheet pinouts."
+                "Note: inferred passive footprints are provisional defaults only. "
+                "Confirm package dimensions against the selected MPN before layout."
             )
         return result
     finally:
