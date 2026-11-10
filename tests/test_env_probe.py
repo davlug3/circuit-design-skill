@@ -126,10 +126,10 @@ class TestKicadProbe(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             _make_exec(
                 Path(td) / "kicad-cli",
-                'if [ "$1" = "version" ]; then echo "9.0.9"; exit 0; fi\\n'
-                'if [ "$1" = "sch" ] && [ "$2" = "erc" ]; then echo "--exit-code-violations"; exit 0; fi\\n'
-                'if [ "$1" = "pcb" ] && [ "$2" = "drc" ]; then echo "--exit-code-violations"; exit 0; fi\\n'
-                'exit 1\\n',
+                'if [ "$1" = "version" ]; then echo "9.0.9"; exit 0; fi\n'
+                'if [ "$1" = "sch" ] && [ "$2" = "erc" ]; then echo "--exit-code-violations"; exit 0; fi\n'
+                'if [ "$1" = "pcb" ] && [ "$2" = "drc" ]; then echo "--exit-code-violations"; exit 0; fi\n'
+                'exit 1\n',
             )
             with TempPath(Path(td)):
                 result = env_probe.probe_kicad_pcb_drc()
