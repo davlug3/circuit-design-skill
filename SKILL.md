@@ -8,7 +8,7 @@ license: MIT
 
 Act as an electronics design engineer. Convert a user's natural-language description into a buildable, reviewable circuit design and its engineering artifacts.
 
-**Target deliverables:** a KiCad project (`.kicad_pro`), editable schematic (`.kicad_sch`), PCB (`.kicad_pcb`), BOM, standalone SPICE netlist, simulation results, and a concise engineering/verification report. Include the KiCad netlist, rendered schematic, model files or model provenance, and manufacturing outputs when applicable.
+**Target deliverables:** a KiCad project (`.kicad_pro`), editable schematic (`.kicad_sch`), PCB (`.kicad_pcb`), sourced BOM, standalone SPICE netlist, simulation results, and a concise engineering/verification report. This repository directly generates the schematic and PCB handoff; the actual project and PCB are dependent on the sibling `pcb-design-skill` and must be verified before being called delivered. Include the KiCad netlist, rendered schematic, model files or model provenance, and manufacturing outputs when applicable.
 
 The normalized circuit specification is the single design contract. Generate every artifact from the same component/connectivity data. The SPICE netlist is the simulation source of truth; KiCad schematic and PCB must be checked against it. Never draw an independent image and present it as an electrical schematic.
 
@@ -64,16 +64,16 @@ Use the common generator and footprint-aware wrapper:
 
 ```bash
 python3 scripts/design_spec.py validate specs/design.json
-python3 scripts/generate_with_footprints.py specs/design.json --out out/
+python3 scripts/generate_with_footprints.py specs/design.json --assembly through-hole --out out/
 ```
 
-Choose assembly preference from the user; if unspecified and safe, offer the common through-hole default. The generator currently emits SPICE, LTspice, KiCad schematic/netlist, BOM, report, and PCB handoff data. Request PCB output and complete the actual `.kicad_pcb` using `pcb-design-skill`; do not mistake the handoff JSON for the board. Create/open the KiCad project file and ensure it references the generated schematic and board.
+Choose assembly preference from the user; if unspecified and safe, ask or explicitly choose a common assembly style. The wrapper's automatic assignments are provisional passives-only starting points. The circuit generator emits SPICE, LTspice, KiCad schematic/netlist, BOM, report, and (when requested) PCB handoff data. It does **not** create a KiCad project (`.kicad_pro`) or actual PCB (`.kicad_pcb`). Use the sibling `pcb-design-skill` to create those artifacts and validate that they open in KiCad. Never treat handoff JSON as a board. If the sibling skill is unavailable, report both board and project as blocked.
 
 Footprint assignment rules:
 - Prefer exact MPN/package footprints from the official KiCad library or a verified vendor library.
 - Assign common standard footprints to passives when the value/package choice is established.
 - Check pad numbering and polarity against the datasheet; maintain explicit logical-pin-to-pad maps.
-- Include manufacturer part number, value, footprint, quantity, reference designator, and sourcing fields in the BOM.
+- Include manufacturer, exact MPN, package, value, footprint, quantity, reference designators, datasheet URL/revision, sourcing URL, footprint status, and pad-map verification status in the BOM. Unknown procurement fields must remain blank, not guessed.
 - Flag every provisional, substituted, or unassigned footprint in the report.
 
 ### 5. Simulation and verification
@@ -82,20 +82,20 @@ Probe the environment and run the strongest available local or CI verification:
 
 ```bash
 python3 scripts/env_probe.py --spec specs/design.json
-python3 scripts/verify.py specs/design.json --out out/ --require design,models,limits,simulate
+python3 scripts/verify.py specs/design.json --out out/ --require design,models,limits,measurements,simulate,erc,pcb-drc
 ```
 
 Add analyses and metrics to the spec that directly test the requirements. Include realistic source/load conditions, tolerances, operating temperature, and relevant startup/transient/fault scenarios. Fetch and hash vendor models using `scripts/model_fetch.py`; do not silently replace missing models with generic ones. If the simulator or model cannot represent a behavior, identify that limitation and the required bench test.
 
-Run KiCad ERC and PCB DRC when supported. Reconcile the KiCad schematic netlist and PCB nets with the SPICE/spec connectivity. Fix critical errors rather than merely listing them. Use `scripts/render_schematic.py` to render the actual editable KiCad schematic to SVG.
+Run KiCad ERC and PCB DRC when supported. `--require erc,pcb-drc` makes both gates mandatory; PCB DRC requires a real `.kicad_pcb` in the output directory and never accepts the PCB handoff JSON as a substitute. Reconcile the KiCad schematic netlist and PCB nets with the SPICE/spec connectivity. Fix critical errors rather than merely listing them. Use `scripts/render_schematic.py` to render the actual editable KiCad schematic to SVG.
 
 ### 6. Deliver and report
 
 Provide a single organized output directory containing, as applicable:
 
-- `<name>.kicad_pro` — KiCad project
-- `<name>.kicad_sch` — editable schematic
-- `<name>.kicad_pcb` — editable PCB with assigned footprints and board data
+- `<name>.kicad_sch` — editable schematic (generated here)
+- `<name>.kicad_pro` — KiCad project (sibling PCB skill output; BLOCKED if unavailable)
+- `<name>.kicad_pcb` — editable PCB (sibling PCB skill output; BLOCKED if unavailable)
 - `<name>.cir` — standalone SPICE netlist
 - `<name>.net` — KiCad netlist
 - `<name>-bom.csv` — bill of materials
@@ -111,7 +111,7 @@ Finish with a concise summary of specifications, assumptions requiring approval,
 Use these terms literally:
 - **PASS:** the named check actually ran and met its stated criterion.
 - **FAIL:** the check ran and did not meet its criterion.
-- **SKIP:** the check could not run.
+- **SKIP:** the check could not run or its required artifact/tool is absent; a required skipped stage makes the required gate fail.
 - **INCOMPLETE:** the design or evidence does not cover a required behavior.
 - **BENCH REQUIRED:** physical behavior, safety, EMI, thermal, or compliance must still be measured.
 

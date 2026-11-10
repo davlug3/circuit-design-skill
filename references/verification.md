@@ -243,3 +243,13 @@ Even with a full pass:
 - Vendor datasheets and application notes for the specific parts.
 - KiCad, *Electrical Rules Checker* documentation.
 - `ngspice` manual, batch mode and analyses.
+
+
+## KiCad PCB DRC
+
+The verifier supports `--require pcb-drc`. It requires an actual
+`<name>.kicad_pcb` file in the output directory and a KiCad CLI whose
+`pcb drc --help` exposes `--exit-code-violations`. It writes
+`<name>-drc.rpt`. A missing board or unsupported CLI is recorded as SKIP;
+when `pcb-drc` is required, that SKIP makes the required-stage gate fail.
+A PCB handoff JSON is never accepted as a board file.
