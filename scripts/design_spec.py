@@ -386,7 +386,7 @@ def normalize_component(comp: dict[str, Any]) -> tuple[dict[str, Any], list[str]
         "value": value,
         "pins": pins,
     }
-    for key in ("footprint", "model", "notes", "params", "waveform"):
+    for key in ("footprint", "model", "notes", "params", "waveform",\n                 "manufacturer", "mpn", "package", "datasheet_url",\n                 "datasheet_revision", "sourcing_url", "footprint_status",\n                 "footprint_evidence", "pad_map_verified"):
         if key in comp:
             out[key] = comp[key]
     if "placement" in comp:
