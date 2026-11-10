@@ -181,6 +181,16 @@
               "type": "string"
             }
           },
+          "no_connect_pins": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Pins intentionally left unconnected; the KiCad generator emits no-connect markers for them."
+          },
+          "part_number": {
+            "type": "string",
+            "description": "Manufacturer orderable part number for the BOM."
+          },
+          "datasheet": { "type": "string" },
           "footprint": {
             "type": "string"
           },
