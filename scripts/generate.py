@@ -612,7 +612,11 @@ def kicad_schematic(spec: dict[str, Any], *, version: str = "20250114") -> str:
     for comp in norm["components"]:
         ref = comp["ref"]
         sx, sy = positions[ref]
+        no_connect_pins = {str(pin) for pin in comp.get("no_connect_pins", [])}
         for pin, (x, y, angle) in kicad_pins(comp["type"], sx, sy, 0, None).items():
+            if pin in no_connect_pins:
+                out.append(f"\t(no_connect (at {x:g} {y:g}) (uuid {_q(uid(norm['name'], 'no-connect', ref, pin))}))")
+                continue
             net = comp["pins"][pin]
             key = (round(x, 4), round(y, 4), net)
             if key in seen:
