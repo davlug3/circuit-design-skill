@@ -123,7 +123,8 @@ REQUIRED_PINS: dict[str, set[str]] = {
     "NMOS": {"1", "2", "3"}, "PMOS": {"1", "2", "3"},
     "OPAMP": {"1", "2", "5"}, "SW": {"1", "2", "3", "4"},
     "E": {"1", "2", "3", "4"}, "G": {"1", "2", "3", "4"},
-    "IC8": {"1", "2", "3", "4", "5", "6", "7", "8"},\n    "TPS5430": {"1", "2", "3", "4", "5", "6", "7", "8", "9"},
+    "IC8": {"1", "2", "3", "4", "5", "6", "7", "8"},
+    "TPS5430": {"1", "2", "3", "4", "5", "6", "7", "8", "9"},
 }
 
 
@@ -1152,6 +1153,10 @@ def validate_spec(spec: dict[str, Any], base_dir: str | Path | None = None) -> d
         if unsupported:
             errors.append("IC8 is currently a schematic-only placeholder; unsupported deliverables: " + ", ".join(sorted(unsupported)))
         warnings.append("IC8 pins are numbered only; add a verified device-specific pin-function map before treating the schematic as an electrical design")
+    if any(c["type"] == "TPS5430" for c in comps):
+        unsupported = set(norm["deliverables"]) & {"spice", "ltspice_asc", "pcb"}
+        if unsupported:
+            errors.append("TPS5430 is currently supported for schematic/netlist/BOM/report only; vendor simulation model and verified PCB footprint are not integrated: " + ", ".join(sorted(unsupported)))
     refs: set[str] = set()
     nets: dict[str, list[str]] = {}
     for comp in comps:
