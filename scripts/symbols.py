@@ -211,7 +211,7 @@ def _lib_symbol(ctype: str) -> str:
         "R": "R", "C": "C", "L": "L", "V": "V", "I": "I",
         "D": "D", "LED": "D", "ZENER": "D",
         "NPN": "Q", "PNP": "Q", "NMOS": "M", "PMOS": "M",
-        "OPAMP": "U", "SW": "S", "E": "E", "G": "G",
+        "OPAMP": "U", "SW": "S", "E": "E", "G": "G", "IC8": "U",
     }[ctype]
     name = f"circuit:{ctype}"
     pins = KICAD_PINS[ctype]
@@ -255,6 +255,8 @@ def _lib_symbol(ctype: str) -> str:
             graphics.append(_poly([(-0.635, -1.27), (0, -0.635), (0.635, -1.27)]))
     elif ctype in ("SW", "E", "G"):
         graphics.append(_rect(-2.54, -2.54, 2.54, 2.54))
+    elif ctype == "IC8":
+        graphics.append(_rect(-5.08, -6.35, 5.08, 6.35))
 
     pin_text = "\n".join(
         _pin(num, "~", x, y, angle, length)
