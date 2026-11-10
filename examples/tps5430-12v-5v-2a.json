@@ -161,12 +161,14 @@
       {
         "id": "R1",
         "text": "Convert nominal 12 V DC to nominal 5 V DC.",
-        "acceptance": "VIN and OUT nets are present in the generated schematic."
+        "acceptance": "VIN and OUT nets are present in the generated schematic.",
+        "source": "S1"
       },
       {
         "id": "R2",
         "text": "Support a nominal 2 A output load.",
-        "acceptance": "Reference power-stage values and 2 A target are documented; component stress and thermal validation remain open."
+        "acceptance": "Reference power-stage values and 2 A target are documented; component stress and thermal validation remain open.",
+        "source": "S1"
       }
     ],
     "architecture": {
@@ -187,7 +189,10 @@
         "alternatives": [
           "Ideal-switch topology fixture"
         ],
-        "rationale": "The schematic is a datasheet-backed controller-level reference; it is not a simulated or validated implementation."
+        "rationale": "The schematic is a datasheet-backed controller-level reference; it is not a simulated or validated implementation.",
+        "sources": [
+          "S1"
+        ]
       }
     ],
     "risks": [
@@ -227,7 +232,9 @@
           "DAP-to-GND connection",
           "BOOT capacitor connection",
           "ENA floating behavior"
-        ]
+        ],
+        "document": "SLVS632",
+        "accessed": "2026-11-10"
       }
     ]
   }
