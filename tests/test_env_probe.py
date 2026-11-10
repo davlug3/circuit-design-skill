@@ -122,6 +122,19 @@ class TestKicadProbe(unittest.TestCase):
         self.assertFalse(result["supported"])
         self.assertIn("KiCad 9+ required", result["detail"])
 
+    def test_pcb_drc_probe_requires_supported_subcommand_and_exit_flag(self):
+        with tempfile.TemporaryDirectory() as td:
+            _make_exec(
+                Path(td) / "kicad-cli",
+                'if [ "$1" = "version" ]; then echo "9.0.9"; exit 0; fi\n'
+                'if [ "$1" = "sch" ] && [ "$2" = "erc" ]; then echo "--exit-code-violations"; exit 0; fi\n'
+                'if [ "$1" = "pcb" ] && [ "$2" = "drc" ]; then echo "--exit-code-violations"; exit 0; fi\n'
+                'exit 1\n',
+            )
+            with TempPath(Path(td)):
+                result = env_probe.probe_kicad_pcb_drc()
+        self.assertTrue(result["supported"], result["detail"])
+
     def test_missing_erc_flag_is_unsupported(self):
         with tempfile.TemporaryDirectory() as td:
             _make_exec(
@@ -140,6 +153,7 @@ class TestStageGating(unittest.TestCase):
         base = {
             "ngspice": {"ok": True, "supported": True, "detail": ""},
             "kicad-cli": {"ok": True, "supported": True, "detail": ""},
+            "kicad-pcb-drc": {"ok": True, "supported": True, "detail": ""},
             "kiutils": {"ok": True, "supported": True, "detail": ""},
         }
         base.update(overrides)

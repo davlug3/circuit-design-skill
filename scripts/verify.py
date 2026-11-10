@@ -71,6 +71,7 @@ LINEAR_TYPES = {"R", "C", "L", "V", "I", "E", "G", "OPAMP"}
 REQUIRED_CHECK = {
     "simulate": "ngspice",
     "erc": "kicad_erc",
+    "pcb-drc": "kicad_pcb_drc",
     "kicad-parse": "kicad_schematic",
     "models": "models",
     "design": "design",
@@ -1144,6 +1145,40 @@ def check_kicad_erc(sch: Path, out: Path) -> Check:
                  f"KiCad ERC reported no error-level violations ({report.name})", evidence)
 
 
+
+def check_kicad_pcb_drc(board: Path, out: Path) -> Check:
+    """Run KiCad PCB DRC against an actual board file; never treat a handoff as a board."""
+    if not board.exists():
+        return Check("kicad_pcb_drc", None,
+                     f"actual PCB file not found ({board.name}); PCB handoff is not a board")
+    capability = env_probe.probe_kicad_pcb_drc()
+    if not capability.get("supported"):
+        detail = capability.get("detail", "kicad-cli PCB DRC is unavailable or incompatible")
+        return Check("kicad_pcb_drc", None, f"PCB DRC was not run: {detail}")
+    exe = capability.get("path")
+    report = out / f"{board.stem}-drc.rpt"
+    try:
+        proc = subprocess.run(
+            [exe, "pcb", "drc", "--exit-code-violations", "-o", str(report), str(board)],
+            capture_output=True, text=True, timeout=240,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return Check("kicad_pcb_drc", False, f"kicad-cli PCB DRC could not run: {exc}")
+    report_text = report.read_text(errors="replace") if report.exists() else ""
+    combined = report_text + proc.stdout + proc.stderr
+    evidence = {"board": str(board), "report": str(report),
+                "exit_code": proc.returncode, "report_text": combined[-6000:]}
+    if proc.returncode == 5:
+        return Check("kicad_pcb_drc", False,
+                     "KiCad PCB DRC reported violations; see " + report.name, evidence)
+    if proc.returncode != 0:
+        return Check("kicad_pcb_drc", False,
+                     f"kicad-cli PCB DRC exited with {proc.returncode}", evidence)
+    return Check("kicad_pcb_drc", True,
+                 f"KiCad PCB DRC completed without error-level violations ({report.name})",
+                 evidence)
+
+
 def design_consistency(spec: dict[str, Any]) -> list[Check]:
     checks: list[Check] = []
     params = spec.get("parameters") or {}
@@ -1288,6 +1323,7 @@ def verify(spec_path: str | Path, outdir: str | Path,
             "to deliverables"))
     if erc and paths["kicad_sch"].exists():
         checks.append(check_kicad_erc(paths["kicad_sch"], out))
+    checks.append(check_kicad_pcb_drc(out / f"{name}.kicad_pcb", out))
 
     if required:
         for stage in required:
@@ -1376,7 +1412,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--erc", action="store_true",
                         help="also run KiCad ERC when kicad-cli is compatible")
     parser.add_argument("--require", metavar="STAGES",
-                        help="comma-separated stages that must PASS: design, limits, measurements, models, simulate, erc, kicad-parse")
+                        help="comma-separated stages that must PASS: design, limits, measurements, models, simulate, erc, pcb-drc, kicad-parse")
     ns = parser.parse_args(argv)
     required = [s.strip() for s in (ns.require or "").split(",") if s.strip()]
     unknown = [s for s in required if s not in REQUIRED_CHECK]

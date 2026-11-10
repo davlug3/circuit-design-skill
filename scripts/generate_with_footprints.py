@@ -14,9 +14,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-# Offline fallback defaults only. The design agent should research each part's
-# datasheet and current KiCad library before selecting a footprint; a researched
-# per-component footprint in the spec takes precedence over these defaults.
+# KiCad library identifiers are deliberately conservative defaults.
 FOOTPRINTS = {
     "smd": {
         "R": "Resistor_SMD:R_0805_2012Metric",
@@ -24,7 +22,6 @@ FOOTPRINTS = {
         "L": "Inductor_SMD:L_0805_2012Metric",
     },
     "through-hole": {
-        # DIN0309 is the KiCad library's 0.5 W / 1/2 W axial resistor option.
         "R": "Resistor_THT:R_Axial_DIN0309_L9.0mm_D3.2mm_P12.70mm_Horizontal",
         "C": "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm",
         "L": "Inductor_THT:L_Radial_D10.0mm_P5.00mm",
@@ -32,8 +29,7 @@ FOOTPRINTS = {
 }
 
 
-# Never infer semiconductor packages from device class. Manufacturer package
-# availability must be researched for the exact MPN before assigning a footprint.
+# Never infer semiconductor packages from device class. Research exact MPN options.
 SEMICONDUCTOR_TYPES = {
     "D", "LED", "ZENER", "NPN", "PNP", "NMOS", "PMOS", "OPAMP",
     "IC", "BJT", "MOSFET", "JFET", "IGBT", "SCR", "TRIAC", "TVS",
@@ -42,20 +38,12 @@ SEMICONDUCTOR_TYPES = {
 
 
 def semiconductor_refs_requiring_research(spec: dict[str, Any]) -> list[str]:
-    """Return semiconductor refs with no explicit, researched footprint."""
-    return [
-        str(comp.get("ref", ""))
-        for comp in spec.get("components", [])
-        if comp.get("type") in SEMICONDUCTOR_TYPES and not comp.get("footprint")
-    ]
+    return [str(c.get("ref", "")) for c in spec.get("components", [])
+            if c.get("type") in SEMICONDUCTOR_TYPES and not c.get("footprint")]
 
 
 def assign_common_footprints(spec: dict[str, Any], assembly: str) -> dict[str, str]:
-    """Fill missing component footprints; return ref -> assigned footprint.
-
-    These are offline fallbacks. Research-backed footprints should be recorded
-    explicitly on each component in the spec and are never overwritten.
-    """
+    """Fill missing component footprints; return ref -> assigned footprint."""
     if assembly not in FOOTPRINTS:
         raise ValueError("assembly must be 'smd' or 'through-hole'")
     defaults = FOOTPRINTS[assembly]
@@ -66,6 +54,11 @@ def assign_common_footprints(spec: dict[str, Any], assembly: str) -> dict[str, s
             continue
         footprint = defaults[comp["type"]]
         comp["footprint"] = footprint
+        comp["footprint_status"] = "provisional"
+        comp["footprint_evidence"] = (
+            f"Generic {assembly} passive default; confirm dimensions against selected MPN."
+        )
+        comp["pad_map_verified"] = False
         assigned[ref] = footprint
     return assigned
 
@@ -134,11 +127,12 @@ def main(argv: list[str] | None = None) -> int:
     assigned = assign_common_footprints(spec, assembly)
     if assigned:
         print(f"Assembly profile: {assembly}")
-        print("Auto-assigned offline fallback footprints:")
+        print("Auto-assigned common footprints:")
         for ref, footprint in assigned.items():
             print(f"  {ref}: {footprint}")
     else:
-        print(f"Assembly profile: {assembly}; no passive fallback assignments needed.")
+        print(f"Assembly profile: {assembly}; no safe default assignments found.")
+
     if semiconductor_todo:
         print("Semiconductor footprints require manufacturer-package research:")
         for ref in semiconductor_todo:
@@ -159,8 +153,8 @@ def main(argv: list[str] | None = None) -> int:
         result = generate_main()
         if assigned:
             print(
-                "Note: passive offline fallback footprints are provisional. "
-                "Verify actual dimensions and lead spacing before fabrication."
+                "Note: inferred passive footprints are provisional defaults only. "
+                "Confirm package dimensions against the selected MPN before layout."
             )
         return result
     finally:

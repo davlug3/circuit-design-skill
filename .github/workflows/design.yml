@@ -33,7 +33,7 @@ on:
         default: "examples/rc-lowpass.json"
         type: string
       require:
-        description: "Comma-separated stages that must PASS (design,simulate,erc,kicad-parse,models)"
+        description: "Comma-separated stages that must PASS (design,simulate,erc,pcb-drc,kicad-parse,models)"
         required: false
         default: "simulate,erc"
         type: string

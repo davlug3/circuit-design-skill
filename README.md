@@ -1,44 +1,15 @@
 # circuit-design-skill
 
-An end-to-end electronics design agent: turn a natural-language description
-into a researched, calculated, simulated and verified circuit design, with an
-interactive intake that asks for important specifications and preferences.
-Use common industry defaults only for non-critical missing details, record every
-assumption, and ask rather than guess when safety or circuit behavior depends
-on the answer.
-
-The target deliverable is a complete, mutually consistent project: KiCad
-project (`.kicad_pro`), editable schematic (`.kicad_sch`), PCB (`.kicad_pcb`),
-footprints and pin maps, BOM (`.csv`), SPICE netlist (`.cir`), required models,
-simulation evidence and a verification report. The project is not complete
-until the applicable electrical, thermal, simulation, ERC/DRC, connectivity and
-board checks pass. A missing backend or failed gate must be reported as an
-incomplete deliverable, never disguised as a working or safe design.
+An evidence-led electronics design agent for analog, digital, mixed-signal and
+power circuits. It turns requirements into a justified architecture, sourced
+component choices, reproducible calculations, SPICE/LTspice/KiCad deliverables,
+rendered schematic images (SVG), and verification evidence. It must explain
+assumptions and operating limits rather than merely generate files.
 
 The normalized circuit specification is the design contract; the generated
 SPICE netlist is the simulation source of truth. LTspice and KiCad artifacts
 share the same connectivity. SVG images are rendered from the KiCad schematic,
 not independently redrawn, so the image remains traceable to the editable file.
-
-## End-to-end design contract
-
-The user may describe the desired behavior in ordinary language rather than
-provide a circuit or component list. The skill owns the translation from that
-brief to requirements, architecture, calculations, part research, schematic,
-board, BOM and SPICE. Ask concise follow-up questions about consequential
-unknowns and build preferences; do not make the user fill out a long engineering
-form. For non-critical omissions, choose conventional, available defaults and
-record them with rationale and confidence. Stop for clarification where an
-unknown affects safety, topology, supply/load compatibility, isolation, pinout
-or a required performance limit.
-
-A successful release must demonstrate that all deliverables share the same
-connectivity and that simulations meet the stated operating conditions and
-acceptance limits. Verify footprints against manufacturer package drawings,
-prefer DIY-friendly through-hole or hand-solderable packages when electrically
-and thermally suitable, and provide a SPICE netlist that can be rerun. A passing
-simulation alone does not prove physical safety or manufacturability: report
-simulation, ERC, DRC, thermal, stress and physical-test evidence separately.
 
 ## Why this exists
 
@@ -478,3 +449,8 @@ installed.
 ## License
 
 MIT. See `LICENSE`.
+
+
+## DIY-first footprint research
+
+Before assigning an IC or semiconductor footprint, research the exact manufacturer's package options for the selected MPN. Prefer suitable through-hole packages, then larger-pitch hand-solderable SMD. Do not infer package families from component type. See `references/footprint-research.md`.

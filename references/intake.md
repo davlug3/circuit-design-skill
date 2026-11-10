@@ -1,26 +1,21 @@
 # Design intake
 
-Start from the user's natural-language goal and conduct a concise, interactive
-intake. Ask for the specifications and preferences that determine topology,
-performance, safety, physical build and cost. Do not force the user to know
-engineering terminology: translate choices into plain language and offer
-sensible options.
+Use conversational questions, one important unknown at a time. Ask about assembly preference (through-hole/SMD), DIY soldering ability, board size, layers, connectors, mounting and cost when relevant. Common non-critical defaults may be proposed but must be recorded; never guess safety-critical, electrical, pinout or mechanical requirements.
 
-For unanswered non-critical details, assume only conventional, commonly used
-values or practices and record them in `assumptions` with rationale and
-confidence. Do not invent requirements, safety limits, loads, supplies, pinouts,
-or critical operating conditions. Ask follow-up questions whenever uncertainty
-could change circuit function, safety or feasibility. The user can revise
-assumptions at any point.
+Ask before designing. A circuit is a set of coupled trade-offs, and the
+"obvious" values are often wrong by an order of magnitude. The questions below
+are grouped so a user can answer quickly, and each one maps to a field in
+`schemas/design-spec.schema.json`.
 
-## 0. Assumption policy
+If the user cannot answer a question, propose a default **and record it in
+`assumptions`**. Never leave a hidden assumption in the netlist.
 
-Before generation, summarize the selected architecture and assumptions in
-plain language and invite corrections. Ordinary defaults do not need a separate
-confirmation turn. Explicitly ask before deciding any missing item that changes
-safety, topology, supply/load compatibility, isolation, user-facing behavior,
-critical performance, target revision or a non-equivalent substitution. Never
-silently substitute an unverified component.
+## 0. Defaults confirmation gate
+
+Before creating specs, handoffs, or generated artifacts, restate the locked
+defaults and assumptions and get explicit confirmation (e.g. `defaults
+confirmed`) or a list of changes. Do not silently lock revision/topology,
+power, bypass, build form factor, anchor source, or unverified substitutions.
 
 ## 1. Function and topology
 
@@ -91,7 +86,7 @@ silently substitute an unverified component.
 
 | Question | Why it matters | Spec field |
 |---|---|---|
-| Additional formats beyond the standard KiCad project, schematic, PCB, BOM and SPICE netlist? | Optional output selection | `deliverables` |
+| Which files: SPICE, LTspice `.asc`, KiCad `.kicad_sch`, `.net`, BOM, report? | Output selection | `deliverables` |
 | Which analyses: OP, AC, transient, DC sweep, noise, transfer function? | Directives in the netlist | `analyses` |
 | Are vendor SPICE models available? | Generic models are unverified | `models` |
 | Which simulator/version? | Syntax and model compatibility | `parameters` |
@@ -112,7 +107,7 @@ not need them.
 
 | Question | Why it matters | Spec field |
 |---|---|---|
-| Board width, height and layer count? | Required for native PCB generation; ask if unknown | `pcb.board` |
+| Board width, height and layer count? | Required; the skill does not guess mechanics | `pcb.board` |
 | Thickness, copper weight, material and finish? | Stackup and fabrication | `pcb.board` |
 | Which pcb-design-skill profile? | DRC/DFM/thermal/impedance gates | `pcb.profile` |
 | Which real footprint for each reference? | Logical SPICE pins are not pads | `pcb.footprints` |
@@ -128,17 +123,15 @@ the PCB skill will ask. See `references/pcb-handoff.md`.
 
 ## Minimum viable intake
 
-Start with a short conversational prompt covering:
+If the user wants speed, ask only these five:
 
-1. What should the circuit do? Describe inputs, outputs and expected behavior.
-2. What power source and output load are available, if known?
-3. What performance matters most (voltage/current, speed/bandwidth, accuracy, noise, efficiency)?
-4. What build preferences matter (through-hole vs SMD, board size, connectors, cost, availability)?
-5. Any enclosure, environment, compliance or safety constraints?
+1. What does it need to do, and what are input and output?
+2. What supply voltage(s) are available?
+3. What load must it drive?
+4. What accuracy/bandwidth/current is required?
+5. Which deliverables (SPICE, LTspice, KiCad, BOM, report, PCB handoff)?
 
-Ask only the follow-up questions needed to resolve consequential unknowns. If
-answers are unavailable, use common defaults only where safe and record them.
-The standard output is a complete KiCad project (`.kicad_pro`), editable schematic (`.kicad_sch`), native PCB (`.kicad_pcb`), BOM and SPICE netlist. Also provide simulation evidence, model/source provenance, a verification report and fabrication files whose checks pass. Ask about board dimensions, layer count and other physical constraints when they are not supplied. Treat the PCB overlay as an intermediate handoff only, never as the final board.
+Then state the remaining assumptions explicitly and proceed.
 
 ## Turning answers into a spec
 
