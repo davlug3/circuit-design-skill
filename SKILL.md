@@ -1,493 +1,139 @@
 ---
 name: circuit-design-skill
-description: Act as an evidence-led electronics design engineer for analog, digital, mixed-signal and power circuits. Translate requirements into scientifically justified architectures, calculations, real-part selections and verified deliverables. Produce SPICE netlists, LTspice schematics, KiCad schematics/netlists, and rendered schematic images (SVG); explain assumptions, cite datasheets/standards, analyze operating limits, simulate, and distinguish structural checks, model-based predictions and physical measurements. Use for circuit architecture, component sizing, design review, SPICE/KiCad/LTspice generation, image export, and verification.
+description: Turn natural-language circuit requirements into a complete, evidence-led electronics design. Elicit critical specifications and preferences, make only conventional low-risk assumptions, research and select real components, calculate and simulate the design, and deliver a KiCad project with schematic and PCB, assigned footprints, BOM, SPICE netlist, and verification evidence. Use for new circuit design, circuit redesign, component sizing, KiCad/SPICE generation, simulation, and design verification.
 license: MIT
 ---
 
 # Circuit Design
 
-Design a circuit the way an engineer does: establish the requirements, choose
-a topology, calculate the values, draw it, simulate it, and state what was and
-was not verified.
+Act as an electronics design engineer. Convert a user's natural-language description into a buildable, reviewable circuit design and its engineering artifacts.
 
-**The normalized circuit specification is the design contract; the generated SPICE netlist is the simulation source of truth.** LTspice and KiCad artifacts are generated from the same component connectivity. A rendered SVG is a view of the KiCad schematic, never an independent electrical source of truth.
+**Target deliverables:** a KiCad project (`.kicad_pro`), editable schematic (`.kicad_sch`), PCB (`.kicad_pcb`), BOM, standalone SPICE netlist, simulation results, and a concise engineering/verification report. Include the KiCad netlist, rendered schematic, model files or model provenance, and manufacturing outputs when applicable.
 
-Treat the model's internal knowledge of electronics and physics as a source of
-hypotheses, not as evidence. Before a number reaches the schematic, trace it to
-a datasheet, an application note, a standard, or a measurement.
+The normalized circuit specification is the single design contract. Generate every artifact from the same component/connectivity data. The SPICE netlist is the simulation source of truth; KiCad schematic and PCB must be checked against it. Never draw an independent image and present it as an electrical schematic.
 
-## Non-negotiables
+## Core behavior
 
-1. **Plan before you draw.** Write the requirements (with acceptance limits),
-   the architecture, the budgets, the risks, and the part decisions before
-   generating a schematic. Use `references/design-process.md` and the templates
-   in `templates/`.
-2. **Ask before guessing.** Use the intake questions in
-   `references/intake.md`. If the user cannot answer, propose a default and
-   record it in `assumptions`. Before generating artifacts, restate locked
-   defaults/assumptions and get explicit confirmation (e.g. `defaults
-   confirmed` or a list of changes). For clone/variant designs, lock the target
-   revision/topology, primary anchor source, known source conflicts, and
-   allowed substitutions.
-3. **Every calculation is Python.** Do not do arithmetic in prose that the
-   scripts could do. Use `scripts/circuit_calc.py` or the MNA solver.
-4. **Physics first.** Check headroom, polarity, power, thermal, tolerance and
-   absolute maximum ratings. A netlist that runs is not a safe circuit. Use
-   exact tolerance-corner analysis for supported scalar equations, then verify
-   worst-case component stresses against sourced datasheet limits. Do not treat
-   nominal values or first-order RSS estimates as guaranteed worst cases.
-5. **Cite the evidence.** Every critical parameter, formula, derating rule and
-   part choice needs a source a reviewer can open: datasheet revision, app
-   note, standard clause, or measurement. See
-   `references/electronics-research.md`. "The model remembers it" is not a
-   source.
-6. **Record the decision.** A part or architecture choice is not complete until
-   the alternatives, the operating point, the rationale and the residual risk
-   are written down. See `templates/decision-record.md` and
-   `references/part-selection.md`.
-7. **State the model.** A generic diode/BJT/MOSFET is a placeholder. Say
-   "unverified (generic models)" until a real model with vendor, part and
-   source is recorded in `models`. Prefer a fetched, hashed model over a typed
-   one. See `references/models.md`; a `.subckt` model also needs an explicit
-   `subckt_pins` node order.
-8. **Verify, then claim.** Run `scripts/verify.py`. A check that did not run is
-   `SKIP`, not `PASS`. Never say "this should work".
-9. **Do not claim ERC/DRC/fab compliance.** This skill produces schematics and
-   netlists, not a manufactured board. Hand off to `pcb-design-skill` for
-   layout, DRC and fabrication; see `references/pcb-handoff.md`.
-10. **Pin numbers are logical, not physical.** See the warning in
-    `references/kicad-format.md` before connecting a footprint.
-11. **Probe capability, not presence.** A binary on `PATH` may still be
-    unusable (wrong architecture, missing shared library, too old). Run
-    `scripts/env_probe.py` before trusting a stage. If the local machine cannot
-    run it, verify on CI and record the backend; never report a local `SKIP` as
-    a local `PASS` because CI passed.
-12. **Images must preserve engineering truth.** Render images from the
-    editable KiCad schematic using the official KiCad CLI. Do not use an image
-    generation model to redraw circuit connectivity. Prefer SVG; label it as
-    a schematic rendering, not a PCB layout or proof of operation.
-13. **Audio targets come from the audio skill.** For audio and sound work,
-    requirements, perceptual limits and measurement conditions come from
-    `audio-engineering-skill`, not from this skill's memory. This skill owns
-    the implementation and verification. See `references/audio-handoff.md`.
+1. **Understand the request and ask for preferences.** Begin with a short, conversational intake. Ask about the function, inputs/outputs, supply, load, performance targets, environment, physical constraints, assembly preference (SMD/through-hole), board size/layers, connectors, cost/availability, and desired interfaces as relevant. Do not overwhelm the user with irrelevant questions.
+2. **Use only common assumptions.** If a missing detail is non-critical and has a widely accepted default for the application, propose that default, identify it explicitly, and record it in the spec's `assumptions`. Examples include a 2-layer FR-4 board, standard 1.6 mm thickness, common 1% resistors, 10% general-purpose capacitors, and through-hole assembly when the user has no preference. Do not silently assume ratings, pinouts, isolation, battery chemistry, safety class, thermal conditions, connector pinouts, enclosure dimensions, or unusual performance requirements.
+3. **Ask rather than assume when a choice changes safety, function, cost, form factor, or compliance.** If essential requirements remain unknown, ask focused follow-up questions before committing to a design. Summarize proposed defaults and obtain confirmation before generating irreversible/fabrication-oriented outputs.
+4. **Design from evidence.** Research current manufacturer datasheets, application notes, and applicable standards. Cite exact part numbers, revisions, source URLs, and access dates for critical claims. Do not rely on model memory as evidence.
+5. **Calculate and optimize.** Use the repository's Python calculators and scripts for component values, tolerances, power, thermal, timing, noise, current, voltage, and worst-case stress. Compare feasible architectures and parts; document tradeoffs and rejected alternatives.
+6. **Use real parts and models.** Select purchasable components with verified ratings and package information. Prefer vendor SPICE models with provenance and hashes. A generic semiconductor model is a placeholder and cannot support a claim that the physical design is fully simulated or verified.
+7. **Assign footprints as completely as possible.** Assign a KiCad footprint to every BOM component for which a defensible package choice exists. Use the exact manufacturer package/datasheet whenever possible. Common generic footprints may be proposed for ordinary passives, but mark them provisional. Never confuse logical SPICE pin order with physical package pad numbering. Verify every IC, transistor, diode, connector, polarized component, and power-device pad mapping against the actual datasheet. List any unassigned or provisional footprints and why.
+8. **Generate the complete deliverable set.** Generate the KiCad project, schematic, PCB, BOM, SPICE netlist, and report. The PCB must contain the real component footprints, board outline, placement, copper layers, net assignments, and routing to the extent supported by the design and tools. Do not substitute a JSON PCB handoff for a PCB file. If this repository cannot create a valid PCB directly, invoke the sibling `pcb-design-skill` and validate its output; if unavailable, clearly report that the board deliverable is blocked and provide the exact handoff inputs/command. Never fabricate a placeholder board and call it complete.
+9. **Simulate the complete design.** Run the appropriate analyses for the circuit: operating point/DC, transient/startup, AC/frequency response, load and line variation, tolerance corners, thermal/power checks, and fault/protection cases where relevant. Use ngspice or another declared simulator. Use real vendor models for semiconductors and controller ICs whenever available. Save decks, logs, raw data, plots, and extracted metrics. Check convergence and compare measured metrics to explicit acceptance criteria. If simulation is unavailable or a model is missing, report the exact stage as `SKIP` or `INCOMPLETE`; never describe the circuit as fully simulated.
+10. **Verify artifact parity.** Re-read generated files and compare the spec, SPICE connectivity, KiCad schematic netlist, footprint/pad maps, PCB nets, and BOM. Run KiCad ERC and PCB DRC when the compatible CLI is available. Require zero unexplained unconnected pins/nets and resolve all critical ERC/DRC errors. A generated file existing is not proof it is valid.
+11. **Be precise about confidence.** Distinguish structural validation, mathematical analysis, model-based simulation, ERC/DRC, and physical bench testing. Do not claim “fully working,” “safe,” “production-ready,” or “fabrication-ready” solely because a simulation passes. State what has actually been checked and what still requires bench validation, environmental testing, certification, or engineering review.
+12. **Stop for high-risk designs.** Do not proceed with actionable design assumptions for mains, hazardous/high voltage (>60 V DC or >30 V AC), isolation barriers, lithium charging/BMS, medical or life-support, automotive safety, RF power/antenna interfaces, explosive environments, or other life/property-critical applications. Ask for the relevant standards, safety architecture, qualified review, and essential specifications; provide conceptual guidance only until safe scope is established.
+13. **Probe tools before trusting them.** Run `scripts/env_probe.py`. A binary on PATH may be incompatible. Use the pinned CI workflow when local KiCad/ngspice is unavailable, and record the backend and commit/run provenance. A skipped check is never a pass.
+14. **Keep all outputs reproducible.** Preserve the input brief, normalized spec, assumptions, source log, design decisions, model provenance, generated files, simulation evidence, and verification JSON in the project output directory.
 
-## Schematic image export
+## Intake
 
-After generating a KiCad schematic, render it with KiCad 9+:
+Ask only the questions relevant to the requested circuit. At minimum establish:
+
+- What should the circuit do? What are its inputs, outputs, and interfaces?
+- What supply voltage/current is available? AC/DC, range, polarity, source impedance?
+- What load must it drive? Required voltage/current/power and load variation?
+- What performance is required: accuracy, bandwidth, ripple, noise, response time, efficiency, or resolution?
+- What environment and operating range: temperature, humidity, vibration, enclosure, duty cycle?
+- What physical and assembly preferences: board dimensions, layers, connectors, SMD/through-hole, available parts, cost target?
+- What protection, compliance, or safety constraints apply?
+- Are there preferred components, vendors, tools, or design references?
+
+If the user does not know an answer, explain the engineering impact and offer a conventional default only when safe and broadly applicable. Record the user's choice or the explicit assumption. Ask one focused follow-up at a time when possible.
+
+## Required workflow
+
+### 1. Requirements and architecture
+
+Create a requirements table with unique IDs, measurable acceptance limits, operating conditions, and source/owner. Define block architecture, interfaces, power tree, grounding, protection, test points, and at least one considered alternative. Record budgets for power, thermal, tolerance, timing, noise, cost, and area.
+
+### 2. Research and component selection
+
+Use manufacturer primary sources first. Check operating range, absolute maximum ratings, derating, package, pinout, thermal impedance, lifecycle, availability, and second sources. For every critical part, record exact MPN, manufacturer, package, datasheet revision/URL, and rationale. Use `references/electronics-research.md`, `references/part-selection.md`, and `references/models.md`.
+
+### 3. Specification and calculations
+
+Create and validate a normalized JSON spec using `schemas/design-spec.schema.json`. The component list and connectivity are authoritative. Use `scripts/circuit_calc.py`, `scripts/optimize.py` where applicable, and `scripts/mna.py`; do not substitute hand-waving arithmetic. Include tolerance and worst-case analysis, source/load interaction, derating, thermal rise, and startup/fault conditions.
+
+### 4. Generate KiCad, SPICE, and BOM
+
+Use the common generator and footprint-aware wrapper:
 
 ```bash
-python3 scripts/render_schematic.py out/design.kicad_sch --out out/images/
+python3 scripts/design_spec.py validate specs/design.json
+python3 scripts/generate_with_footprints.py specs/design.json --out out/
 ```
 
-The renderer invokes `kicad-cli sch export svg`, verifies that SVG files were
-created and parses each output as XML. The SVG is a visual representation of
-the editable KiCad schematic; it is not a PCB layout, an independent
-connectivity source, or evidence that the circuit operates.
+Choose assembly preference from the user; if unspecified and safe, offer the common through-hole default. The generator currently emits SPICE, LTspice, KiCad schematic/netlist, BOM, report, and PCB handoff data. Request PCB output and complete the actual `.kicad_pcb` using `pcb-design-skill`; do not mistake the handoff JSON for the board. Create/open the KiCad project file and ensure it references the generated schematic and board.
 
-## Workflow
+Footprint assignment rules:
+- Prefer exact MPN/package footprints from the official KiCad library or a verified vendor library.
+- Assign common standard footprints to passives when the value/package choice is established.
+- Check pad numbering and polarity against the datasheet; maintain explicit logical-pin-to-pad maps.
+- Include manufacturer part number, value, footprint, quantity, reference designator, and sourcing fields in the BOM.
+- Flag every provisional, substituted, or unassigned footprint in the report.
 
-### 0. Plan, research, choose
+### 5. Simulation and verification
 
-Do this before intake or scaffolding. It is the cheapest place to fix a design.
-
-1. **Frame** the problem: function, environment, supplies, load, mechanical
-   limits, lifecycle, compliance, and acceptance measurements.
-2. **Research** the candidate technologies and parts. Start from datasheets and
-   vendor application notes; use standards for compliance claims. Log the
-   revision and access date. See `references/electronics-research.md`.
-3. **Architect**: block diagram, interface contracts, power tree, grounding,
-   protection, test points. Compare at least one alternative and record why it
-   was rejected. See `references/design-process.md`.
-4. **Budget**: power, thermal, tolerance, timing, noise, cost, area. Put the
-   numbers in Python, not in prose.
-5. **Select parts**: gate on must-haves, score the survivors, verify the winner
-   at the worst-case operating point, and write a decision record. See
-   `references/part-selection.md`.
-6. **Record** the result in the spec's `design` object:
-
-   ```json
-   "design": {
-     "requirements": [{"id": "R1", "text": "5 V +/-2% at 0-1 A", "acceptance": "measure at 0 A and 1 A", "source": "brief rev A"}],
-     "architecture": {"summary": "buck converter", "blocks": ["input", "buck", "output"], "budgets": {"efficiency": "> 85%"}},
-     "decisions": [{"id": "D1", "decision": "buck instead of linear", "alternatives": ["LDO"], "rationale": "1.5 W would overheat an LDO", "sources": ["TPS datasheet, thermal section"]}],
-     "risks": [{"id": "K1", "risk": "inductor saturation at startup", "severity": "high", "mitigation": "soft-start and 1.5x Isat margin", "verification": "startup transient at 40 C"}],
-     "sources": [{"title": "TPS datasheet", "document": "SBVS123", "revision": "C", "accessed": "2026-11-08"}]
-   }
-   ```
-
-   `python3 scripts/verify.py --require design` fails a spec with no complete
-   record. Start from `templates/design-plan.md`,
-   `templates/decision-record.md` and `templates/research-log.md`.
-
-### 1. Intake
-
-Ask the questions in `references/intake.md`. The minimum viable set:
-
-- What must it do, and what are the input and output?
-- What supply voltage(s) are available?
-- What load must it drive?
-- What accuracy, bandwidth or current is required?
-- Which deliverables: SPICE, LTspice `.asc`, KiCad `.kicad_sch`/`.net`, BOM,
-  report, PCB handoff?
-
-For a fast path, scaffold a known topology and then edit the JSON:
+Probe the environment and run the strongest available local or CI verification:
 
 ```bash
-python3 scripts/design_spec.py scaffold --topology rc_lowpass \
-  --param r=1k --param c=100n --out specs/rc.json
+python3 scripts/env_probe.py --spec specs/design.json
+python3 scripts/verify.py specs/design.json --out out/ --require design,models,limits,simulate
 ```
 
-Supported scaffolds: `rc_lowpass`, `rc_highpass`, `divider`, `sallen_key_lp`,
-`sallen_key_hp`, `bjt_ce`, `led`, `i2c`, `opamp_noninverting`, `opamp_inverting`,
-`zener_regulator`, `buck`.
+Add analyses and metrics to the spec that directly test the requirements. Include realistic source/load conditions, tolerances, operating temperature, and relevant startup/transient/fault scenarios. Fetch and hash vendor models using `scripts/model_fetch.py`; do not silently replace missing models with generic ones. If the simulator or model cannot represent a behavior, identify that limitation and the required bench test.
 
-### 2. Spec
+Run KiCad ERC and PCB DRC when supported. Reconcile the KiCad schematic netlist and PCB nets with the SPICE/spec connectivity. Fix critical errors rather than merely listing them. Use `scripts/render_schematic.py` to render the actual editable KiCad schematic to SVG.
 
-The spec is a JSON object validated against
-`schemas/design-spec.schema.json`. The component list is authoritative;
-`topology` and `parameters` drive the calculators and the scaffold.
+### 6. Deliver and report
 
-```bash
-python3 scripts/design_spec.py validate specs/rc.json
-python3 scripts/design_spec.py explain  specs/rc.json
-python3 scripts/design_spec.py normalize specs/rc.json --out specs/rc.normalized.json
-```
+Provide a single organized output directory containing, as applicable:
 
-Rules:
+- `<name>.kicad_pro` — KiCad project
+- `<name>.kicad_sch` — editable schematic
+- `<name>.kicad_pcb` — editable PCB with assigned footprints and board data
+- `<name>.cir` — standalone SPICE netlist
+- `<name>.net` — KiCad netlist
+- `<name>-bom.csv` — bill of materials
+- `<name>-report.md` and `<name>-report.json` — design rationale, assumptions, sources, limits, and risks
+- `<name>-verification.json` — machine-readable check results
+- simulator decks, logs, raw data, and plots
+- rendered schematic/board images and fabrication outputs if requested and validated
 
-- `ground` must be a net connected to at least one component.
-- At least one independent source (`V` or `I`) is required.
-- Every component needs `ref`, `type` and `pins`; `value` defaults to `0`.
-- Pin names accept aliases: `A`/`K`, `C`/`B`/`E`, `D`/`G`/`S`, `IN+`/`IN-`,
-  `V+`/`V-`, `OUT`.
-- A one-pin net is reported as floating; that is usually a wiring mistake.
+Finish with a concise summary of specifications, assumptions requiring approval, key selected parts, simulation conditions/results, ERC/DRC status, unassigned/provisional footprints, remaining risks, and exact artifact locations. Never hide a failed or skipped stage.
 
-### 3. Calculate
+## Verification language
 
-```bash
-python3 scripts/circuit_calc.py <command> [--json] [--param value ...]
-python3 scripts/circuit_calc.py list
+Use these terms literally:
+- **PASS:** the named check actually ran and met its stated criterion.
+- **FAIL:** the check ran and did not meet its criterion.
+- **SKIP:** the check could not run.
+- **INCOMPLETE:** the design or evidence does not cover a required behavior.
+- **BENCH REQUIRED:** physical behavior, safety, EMI, thermal, or compliance must still be measured.
 
-# Exact worst-case corners plus sensitivity/RSS for an RC cutoff
-python3 scripts/circuit_calc.py tolerance --mode rc_fc \\
-  --components '{"r":{"value":1000,"tol":1},"c":{"value":1e-7,"tol":10}}' --json
-```
+Simulation is necessary but not sufficient. A design is not proven safe, fully working, or production-ready until appropriate physical validation and qualified review have been completed.
 
-26 commands:
+## Repository references and tools
 
-| Group | Commands |
-|---|---|
-| Passive | `ohms`, `divider`, `rc`, `rl`, `rlc`, `eseries`, `tolerance`, `db` |
-| Analog | `sallen-key`, `opamp`, `noise`, `current-mirror` |
-| Devices | `bjt-bias`, `mosfet-bias`, `led`, `zener`, `crystal` |
-| Power | `ldo`, `buck`, `boost`, `battery`, `thermal`, `trace` |
-| Digital/interface | `i2c`, `adc`, `logic` |
+Follow the detailed equations, schemas, generators, validators, and caveats in:
 
-The tolerance command enumerates every min/max combination (up to 16 variables),
-reports the exact range and corner assignments, and retains first-order
-sensitivity/RSS as separate estimates. It does not model temperature drift,
-aging or correlated tolerances unless those effects are included in the input
-ranges. Every command returns the same envelope: `ok`, `inputs`, `results`,
-`formulas`, `assumptions`, `warnings`, `notes`. Use `--json` when you need to
-feed the result into a spec.
+- `references/intake.md`
+- `references/design-process.md`
+- `references/part-selection.md`
+- `references/electronics-research.md`
+- `references/models.md`
+- `references/verification.md`
+- `references/pcb-handoff.md`
+- `references/kicad-format.md`
+- `references/metrics.md`
+- `references/physics-reliability.md`
 
-Formulas and design notes live in `references/topologies.md`,
-`references/analog.md`, `references/digital.md`, `references/power.md` and
-`references/physics-reliability.md`.
-
-### 4. Optimize, then generate
-
-For supported first-order RC low-pass designs, search standard E-series values
-against the target cutoff and exact independent R/C tolerance corners:
-
-```bash
-python3 scripts/optimize.py specs/rc.json --target-fc 1.59k \\
-  --r-min 1k --r-max 100k --c-min 10n --c-max 1u \\
-  --r-tol 1 --c-tol 10 --max-error-percent 5 \\
-  --out-spec specs/rc-optimized.json --require-feasible
-```
-
-The optimizer ranks discrete candidates by worst-case cutoff error and records
-the search method in the output spec. It currently supports `rc_lowpass` only
-and assumes an ideal source and unloaded output. It does not optimize loaded
-filters, active filters or nonlinear/power topologies. Simulate the optimized
-spec with the actual source/load and verify datasheet operating limits before
-accepting it. See `references/optimization.md`.
-
-### 5. Generate
-
-For KiCad or PCB outputs, use the assembly-aware wrapper. It asks whether the
-design is primarily SMD or through-hole, then fills only missing footprints
-with conservative common defaults before calling the normal generator:
-
-```bash
-python3 scripts/generate_with_footprints.py specs/rc.json --out out/
-# Non-interactive use:
-python3 scripts/generate_with_footprints.py specs/rc.json --out out/ --assembly smd
-python3 scripts/generate_with_footprints.py specs/rc.json --out out/ --assembly through-hole
-```
-
-Through-hole is the preferred default (press Enter at the prompt). The
-wrapper assigns common resistor, capacitor, inductor, diode, zener, LED, BJT,
-MOSFET and op-amp footprints. SMD equivalents are available when selected.
-For ICs and transistors, it selects a common first-choice package (DIP-8 /
-SOIC-8, TO-92 / TO-220 / SOT-23) based on device class, not the exact
-manufacturer part. These are provisional layout defaults: verify the actual
-package, dimensions, polarity and pad numbering against the part datasheet
-before fabrication. Existing explicit footprints are preserved. Logical SPICE
-pins are not physical package pads; pin maps remain a separate, datasheet-backed
-decision.
-
-```bash
-python3 scripts/generate_with_footprints.py specs/rc.json --out out/
-python3 scripts/generate_with_footprints.py specs/rc.json --out out/ --formats spice,ltspice_asc,kicad_sch
-python3 scripts/generate_with_footprints.py specs/rc.json --out out/ --ltspice-version 4.1
-python3 scripts/generate_with_footprints.py specs/rc.json --out out/ --pcb-board 50x40
-```
-
-Every semiconductor needs a real model before the simulation means anything:
-supply a vendor `.lib`/`.mod` file (or full card) in `models`, with `vendor`,
-`part` and `source`. A `.subckt` model also needs `subckt_pins`; the generator
-then emits an `X` device in that node order. See `references/models.md`.
-
-To find and ingest a published model, use the catalog and the fetcher:
-
-```bash
-python3 scripts/model_fetch.py --list
-python3 scripts/model_fetch.py --part 2N3904 --out models/
-python3 scripts/model_fetch.py --part 2N7002 --write-spec specs/switch.json --ref M1
-```
-
-The fetcher downloads the file, extracts the requested `.model` or `.subckt`,
-refuses a file that does not define it, records the SHA-256 and provenance, and
-writes a `models` entry the resolver accepts. It does not certify that the model
-matches your physical part, and it does not bypass a vendor's licence: read the
-file header, do not commit restricted vendor models, and prefer `--file` with
-`--source` when a site's TLS certificate is broken.
-
-Without `--formats`, the spec's `deliverables` list is used. Outputs:
-
-| File | Purpose |
-|---|---|
-| `<name>.cir` | Self-contained SPICE netlist; the simulation source of truth |
-| `<name>.models` | Model cards for the `.asc` include |
-| `<name>.asc` | LTspice schematic, net labels at every pin |
-| `<name>.net` | KiCad netlist |
-| `<name>.kicad_sch` | KiCad 9 schematic with embedded symbols |
-| `<name>-bom.csv` | Bill of materials |
-| `<name>-report.md` / `.json` | Design report |
-| `<name>-pcb.json` | PCB overlay (when `pcb` or `--pcb-board` is requested) |
-| `<name>-pinmap.json` | SPICE pin -> footprint pad map |
-| `<name>-node-aliases.json` | SPICE node -> PCB net aliases |
-| `<name>-pcb-handoff.md` | Exact PCB-skill command and remaining gaps |
-
-The `.asc` uses a deterministic grid layout. KiCad also supports explicit
-`placement: {x_mm, y_mm}` overrides per component, aligned to its 1.27 mm
-grid; these overrides affect the KiCad drawing only. The `.kicad_sch` default
-layout places one component per cell, with a net label at every pin. This is
-intentional: it avoids fragile autorouting and makes the connectivity exact.
-Use placement overrides to organize the KiCad drawing into functional blocks;
-the LTspice `.asc` retains its own deterministic grid. Clean up the presentation
-in LTspice or KiCad if you need a publication-quality drawing.
-
-### 6. PCB handoff
-
-PCB files are opt-in: add `"pcb"` to `deliverables`, pass `--pcb-board
-WIDTHxHEIGHT`, or add `pcb` to `--formats`. The handoff needs a board size; it
-does not guess one.
-
-```bash
-python3 scripts/generate_with_footprints.py specs/rc.json --out out/ --pcb-board 50x40
-python3 scripts/pcb_handoff.py specs/rc.json --out out/ --board 50x40
-```
-
-The circuit spec may carry a `pcb` block with `profile`, `board`, `rules`,
-`netclasses`, `footprints`, `pin_map`, `node_aliases`, `placement`, `routing`
-and `extra_components`. See `references/pcb-handoff.md`.
-
-The handoff writes the overlay, a pin map and node aliases, then prints the
-exact command for `pcb-design-skill`. It never guesses a footprint or a package
-pinout: missing footprints and pin maps are listed for the PCB skill's visual
-picker. Logical SPICE pins are not physical pads (NPN 1/2/3 = C/B/E here), so a
-pin map from the real datasheet is mandatory for multi-pin parts. An op-amp
-`U1` is imported by SPICE as `XU1`; the handoff maps the reference and says so.
-
-Do not claim a board is manufacturable until the PCB skill's DRC, DFM,
-unconnected and netlist-parity gates pass.
-
-### 7. Verify
-
-```bash
-python3 scripts/verify.py specs/rc.json --out out/
-python3 scripts/verify.py specs/rc.json --out out/ --json
-# Require explicit, sourced component stress checks before calling the design accepted
-python3 scripts/verify.py specs/rc.json --out out/ --require limits
-```
-
-The verifier re-reads the generated files and checks:
-
-- SPICE device node lists match the spec;
-- LTspice flags sit at the correct pin coordinates with the correct nets;
-- KiCad netlist nets match the spec exactly;
-- KiCad schematic pins have the correct global labels (via `kiutils`, if
-  installed);
-- the PCB overlay, pin map and node aliases agree with the netlist, and the
-  sibling PCB validator accepts the overlay when all footprints are present;
-- linear circuits solve in the independent MNA solver and match closed-form
-  expectations;
-- `ngspice` runs the netlist if it is installed and compatible;
-- declared gain, bandwidth, THD, noise or RMS metrics are extracted from the
-  ngspice rawfile and compared with their targets or limits (see
-  `references/metrics.md`);
-- every semiconductor resolves to a real, traceable model, or is reported as
-  a generic placeholder (add `--require models` to make that a failure);
-- every declared operating stress is within its sourced min/max datasheet limit; `--require limits` makes a missing or failing limits record a failure;
-- the `design` record has requirements, an architecture, sourced decisions,
-  risks and sources (add `--require design` to make a missing record a failure);
-- KiCad ERC runs with `--erc` when `kicad-cli` is installed and compatible.
-
-Read `references/verification.md` for what each check proves and what it does
-not, and `references/metrics.md` for the metric block, analysis requirements
-and limits.
-
-#### When the local machine cannot run a check
-
-```bash
-# What can this machine actually do?
-python3 scripts/env_probe.py --spec specs/rc.json
-
-# Make the run fail unless simulation really passed here.
-python3 scripts/verify.py specs/rc.json --out out/ --require simulate
-
-# Machine is aarch64/Android with no ngspice or KiCad? Use CI.
-python3 scripts/ci_dispatch.py --spec specs/rc.json --require simulate,erc \
-  --watch --download out/ci
-```
-
-The probe runs each tool, not just `which`. It reports `MISSING` and
-`INCOMPATIBLE` separately, and `recommended_backend` is `local`, `ci` or
-`none`. The verifier's JSON records `provenance.backend`, so a CI result is
-never mistaken for a local one.
-
-CI dispatch requires a git repository with a pushed branch and the
-`.github/workflows/design.yml` workflow; it refuses a dirty tree, an unpushed
-commit or a spec outside the repository, because GitHub would verify a
-different revision.
-
-### 8. Report
-
-The report states the design, the assumptions, the warnings, the analyses and
-the verification evidence. Quote it; do not replace it with a vague summary.
-
-## Design rules of thumb
-
-These are starting points, not laws. Verify the ones that matter.
-
-- Op-amp: `GBW >= 10*Gain*f_max`; `SR >= 2*pi*f_max*Vpeak`.
-- Divider: divider current at least 10x the load current, or buffer it.
-- RC filter: source and load impedances should be at least 10x away from `R`.
-- Sallen-Key LP: `C1 = 2*C2` and equal `R` gives Butterworth `Q = 0.707`.
-- Sallen-Key HP: `R2 = 2*R1` and equal `C` gives Butterworth `Q = 0.707`.
-- Buck: ripple ratio `0.2–0.4`; inductor saturation above peak current.
-- LDO: `P = (Vin-Vout)*Iout`; check the thermal pad and the capacitor ESR.
-- I2C: `Rp(min) = (VDD-VOL)/IOL`; `Rp(max) = tr/(0.8473*Cb)`.
-- ADC: `SNR = 6.02N + 1.76 dB`; settle to 0.5 LSB.
-- Thermal: `Tj = Ta + P*(theta_jc + theta_cs + theta_sa)`; derate.
-- Trace: IPC-2221 for temperature rise, then check voltage drop.
-
-## Safety and scope
-
-Stop and ask before proceeding with:
-
-- mains, high voltage (> 60 V DC or > 30 V AC), or an isolation barrier;
-- lithium battery charging;
-- medical, automotive safety, or life-support use;
-- RF power or antenna-facing circuitry;
-- anything where a wrong pin assignment could destroy hardware.
-
-This skill does not replace a datasheet, a bench measurement, ERC/DRC, or a
-safety review.
-
-## Files
-
-```
-SKILL.md
-README.md
-LICENSE
-schemas/design-spec.schema.json
-catalog/models.json          known fetchable model sources (part, model, vendor)
-scripts/circuit_common.py    value parsing, E-series, result envelope
-scripts/circuit_calc.py      26 calculators and CLI
-scripts/optimize.py          discrete E-series RC low-pass optimizer
-scripts/mna.py               pure-Python linear MNA solver
-scripts/design_spec.py       validate / normalize / scaffold / model resolution
-scripts/symbols.py           LTspice and KiCad symbol geometry
-scripts/generate.py          .cir, .asc, .net, .kicad_sch, BOM, report
-scripts/model_fetch.py       find, validate, hash and ingest a SPICE model
-scripts/pcb_handoff.py       overlay, pin map, node aliases, handoff document
-scripts/ngspice_raw.py       ASCII rawfile parser: plots, variables, complex data
-scripts/metrics.py           gain, bandwidth, THD, noise and RMS extraction
-scripts/audio_handoff.py     merge an audio handoff and test-point map
-scripts/verify.py            structural, MNA, metrics, ERC, model and design checks
-scripts/env_probe.py         capability probe: ok / incompatible / missing
-scripts/ci_dispatch.py       GitHub Actions dispatch with safety checks
-.github/workflows/design.yml  unit tests, KiCad 9 + ngspice verification
-references/                  planning and research, part selection, intake,
-                             topologies, analog, digital, power,
-                             physics/reliability, LTspice, KiCad, PCB handoff,
-                             models, metrics, verification
-templates/                   design plan, decision record, research log
-references/optimization.md   discrete search method, assumptions and limits
-examples/                    ready-to-run specs, including rc-lowpass-pcb.json,
-                             rc-lowpass-metrics.json and the audio handoff
-                             fixtures
-tests/                       unit and end-to-end tests
-```
-
-## Environment
-
-Python 3.10+ standard library only. No numpy/scipy, no KiCad, no LTspice and
-no ngspice are required to generate and structurally verify files. `kiutils`
-is optional and only used for schematic parsing; `ngspice` is optional and only
-used for simulation; `kicad-cli` is optional and only used for ERC.
-
-Presence is not capability. Run the probe first:
-
-```bash
-python3 scripts/env_probe.py
-python3 scripts/env_probe.py --json --spec specs/rc.json
-```
-
-If the stages you need are `NOT READY`, dispatch the same spec to the GitHub
-Actions workflow instead of claiming the check passed:
-
-```bash
-python3 scripts/ci_dispatch.py --spec specs/rc.json --require simulate,erc --watch
-```
+Run tests after modifying implementation code:
 
 ```bash
 python3 -m unittest discover -s tests -v
 ```
-
-## Sources
-
-The format details were checked against vendor documentation, not memory:
-
-- Analog Devices, *LTspice Schematic Reference* and *LTspice Help*.
-- KiCad developer documentation, *Schematic file format* and *Netlist file
-  format*; KiCad 9 demo files.
-- TI, *Basic Calculation of a Buck Converter's Power Stage* (SLVA477C).
-- TI, *Op Amps for Everyone* (SLOD006) and filter application notes.
-- NXP, *UM10204 I2C-bus specification*.
-- IPC-2221B, *Generic Standard on Printed Board Design*.
-- KiCad Spice Library and PySpice example libraries as model mirrors; each
-  fetched model keeps its own header and source URL. Check the source's terms
-  before redistributing a model.
-
-Design decisions are only as good as their evidence. For each project, add the
-actual datasheet revisions, application notes, standards and measurements to
-`design.sources`; do not rely on this list as a substitute. See
-`references/electronics-research.md` for the source hierarchy and citation
-format.
-
-See the `references/` files for the specific equations and caveats.
