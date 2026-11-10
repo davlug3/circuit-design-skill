@@ -31,7 +31,8 @@
       "notes": "TI SLVS632L; DDA HSOIC with exposed thermal pad. Footprint intentionally unassigned pending package CAD verification.",
       "no_connect_pins": [
         "2",
-        "3"
+        "3",
+        "5"
       ],
       "placement": {
         "x_mm": 127,
@@ -42,7 +43,7 @@
         "2": "NC_U1_2",
         "3": "NC_U1_3",
         "4": "FB",
-        "5": "ENA_FLOAT",
+        "5": "NC_U1_5",
         "6": "GND",
         "7": "VIN",
         "8": "SW",
