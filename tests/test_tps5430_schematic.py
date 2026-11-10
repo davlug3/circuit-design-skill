@@ -6,7 +6,7 @@ import json
 import unittest
 from pathlib import Path
 
-from scripts.design_spec import validate_spec
+from scripts.design_spec import canonical_pin, validate_spec
 from scripts.generate import kicad_schematic
 from scripts.symbols import KICAD_PINS, KICAD_PIN_NAMES, KICAD_PIN_TYPES, kicad_lib_symbols
 
@@ -29,7 +29,14 @@ class TestTPS5430Schematic(unittest.TestCase):
         )
         self.assertEqual(KICAD_PIN_TYPES["TPS5430"]["2"], "no_connect")
         self.assertEqual(KICAD_PIN_TYPES["TPS5430"]["3"], "no_connect")
-        self.assertEqual(KICAD_PINS["TPS5430"]["9"][3], 1.27)
+        self.assertEqual(KICAD_PINS["TPS5430"]["9"][3], 2.54)
+        self.assertEqual(abs(KICAD_PINS["TPS5430"]["1"][1] - KICAD_PINS["TPS5430"]["2"][1]), 5.08)
+        self.assertEqual(KICAD_PIN_TYPES["TPS5430"]["1"], "input")
+        self.assertEqual(KICAD_PIN_TYPES["TPS5430"]["8"], "output")
+
+    def test_named_pin_aliases_resolve_to_datasheet_pin_numbers(self):
+        for name, number in {"BOOT": "1", "VSENSE": "4", "ENA": "5", "GND": "6", "VIN": "7", "PH": "8", "DAP": "9"}.items():
+            self.assertEqual(canonical_pin("TPS5430", name), number)
 
     def test_embedded_kicad_symbol_preserves_pin_names_types_and_numbers(self):
         library = kicad_lib_symbols(["TPS5430"])
@@ -59,6 +66,8 @@ class TestTPS5430Schematic(unittest.TestCase):
         for net in ("BOOT", "FB", "VIN", "SW", "OUT", "GND"):
             self.assertIn(f'(global_label "{net}"', schematic)
         self.assertEqual(schematic.count("(no_connect (at "), 3)
+        for floating in ("NC_U1_2", "NC_U1_3", "NC_U1_5"):
+            self.assertNotIn(f'(global_label "{floating}"', schematic)
         self.assertIn('(number "9"', schematic)
         # Pin 9 (DAP) and pin 6 (GND) share the same net.
         u1 = next(comp for comp in self.spec["components"] if comp["ref"] == "U1")
