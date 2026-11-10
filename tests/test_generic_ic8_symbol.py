@@ -5,6 +5,7 @@ from __future__ import annotations
 import unittest
 
 from scripts.symbols import KICAD_PINS, kicad_lib_symbols, kicad_pins
+from scripts.generate import kicad_schematic
 
 
 class TestGenericIC8Symbol(unittest.TestCase):
@@ -20,6 +21,20 @@ class TestGenericIC8Symbol(unittest.TestCase):
         self.assertIn('"circuit:IC8"', library)
         for number in range(1, 9):
             self.assertIn(f'(number "{number}"', library)
+
+    def test_schematic_emits_pin_labels_and_instances(self):
+        spec = {
+            "name": "ic8-symbol-check",
+            "ground": "GND",
+            "components": [{
+                "ref": "U1", "type": "IC8", "value": 0,
+                "pins": {str(n): f"NET{n}" for n in range(1, 9)},
+            }],
+        }
+        schematic = kicad_schematic(spec)
+        for number in range(1, 9):
+            self.assertIn(f'(global_label "NET{number}"', schematic)
+            self.assertIn(f'(pin "{number}"', schematic)
 
 
 if __name__ == "__main__":
