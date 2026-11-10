@@ -45,7 +45,7 @@ class TestVerifyExamples(unittest.TestCase):
             out = Path(td)
             board = out / "sample.kicad_pcb"
             board.write_text("(kicad_pcb (version 20241229))")
-            with patch.object(verify.env_probe, "probe_kicad_cli",
+            with patch.object(verify.env_probe, "probe_kicad_pcb_drc",
                               return_value={"supported": True, "path": "/usr/bin/kicad-cli"}), \\
                  patch.object(verify.subprocess, "run",
                               return_value=SimpleNamespace(returncode=0, stdout="", stderr="")) as run:
