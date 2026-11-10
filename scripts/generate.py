@@ -671,7 +671,7 @@ def _bom_value(comp: dict[str, Any]) -> str:
 
 
 def bom_rows(spec: dict[str, Any]) -> list[dict[str, str]]:
-    groups: dict[tuple[str, str, str, str], list[str]] = {}
+    groups: dict[tuple[str, ...], list[str]] = {}
     for comp in spec["components"]:
         key = (
             comp["type"], _bom_value(comp), comp.get("footprint", ""),
