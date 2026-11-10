@@ -2,6 +2,7 @@
 """Run circuit generation and the sibling KiCad PCB pipeline end to end."""
 from __future__ import annotations
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -28,7 +29,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--layers", type=int, default=2, choices=(2, 4, 6))
     parser.add_argument("--profile", default="2layer-low-speed")
     parser.add_argument("--assembly", required=True, choices=("through-hole", "smd"))
-    parser.add_argument("--backend", choices=("auto", "local", "ci"), default="auto")
+    parser.add_argument("--backend", choices=("local",), default="local",
+                        help="PCB integration runs locally; sibling CI cannot access temporary handoff files")
     parser.add_argument("--ask", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--ask-mobile", action="store_true")
     parser.add_argument("--allow-unverified", action="store_true",
@@ -47,7 +49,11 @@ def main(argv: list[str] | None = None) -> int:
     generated, pcb_out = out / "generated", out / "pcb"
     generated.mkdir(parents=True, exist_ok=True)
     pcb_out.mkdir(parents=True, exist_ok=True)
-    stem = Path(args.spec).stem
+    try:
+        spec_data = json.loads(Path(args.spec).read_text(encoding="utf-8"))
+        stem = str(spec_data["name"])
+    except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        parser.error(f"cannot read design spec name: {exc}")
 
     generator = [
         sys.executable, str(ROOT / "scripts" / "generate_with_footprints.py"),
@@ -77,7 +83,7 @@ def main(argv: list[str] | None = None) -> int:
         sys.executable, str(pcb_skill / "scripts" / "design_pipeline.py"),
         "all", str(overlay), "--ltspice", str(spice),
         "--pin-map", str(pin_map), "--node-aliases", str(aliases),
-        "--output", str(pcb_out), "--backend", args.backend,
+        "--output", str(pcb_out), "--backend", "local",
     ]
     if args.ask is not None:
         pipeline.append("--ask" if args.ask else "--no-ask")
