@@ -50,9 +50,10 @@ STAGE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
     "simulate": ("ngspice",),
     "kicad-parse": ("kiutils",),
     "erc": ("kicad-cli",),
+    "pcb-drc": ("kicad-pcb-drc",),
     "fab": ("kicad-cli",),
 }
-ALL_STAGES = ("simulate", "kicad-parse", "erc", "fab")
+ALL_STAGES = ("simulate", "kicad-parse", "erc", "pcb-drc", "fab")
 
 SMOKE_NETLIST = """* ngspice compatibility probe
 V1 1 0 DC 1
@@ -205,6 +206,29 @@ def probe_kicad_cli(command: str | None = None) -> dict[str, Any]:
     elif not supported and major is not None:
         detail += " (ERC exit-code gating unavailable; KiCad 9+ required)"
     return _tool(True, supported=supported, version=version, major=major, path=path, detail=detail)
+
+
+
+def probe_kicad_pcb_drc(command: str | None = None) -> dict[str, Any]:
+    """Probe the actual PCB DRC subcommand and violation exit-code flag."""
+    base = probe_kicad_cli(command)
+    if not base.get("supported"):
+        return _tool(bool(base.get("ok")), supported=False,
+                     version=base.get("version"), major=base.get("major"),
+                     path=base.get("path"), detail=base.get("detail", "kicad-cli unavailable"))
+    proc = _run([base["path"], "pcb", "drc", "--help"], timeout=30)
+    if proc is None or proc.returncode != 0:
+        return _tool(True, supported=False, version=base.get("version"),
+                     major=base.get("major"), path=base.get("path"),
+                     detail="kicad-cli found but PCB DRC subcommand is unavailable: "
+                            + _failure_detail(proc, "subcommand failed"))
+    if "--exit-code-violations" not in _text(proc):
+        return _tool(True, supported=False, version=base.get("version"),
+                     major=base.get("major"), path=base.get("path"),
+                     detail="PCB DRC lacks --exit-code-violations")
+    return _tool(True, supported=True, version=base.get("version"),
+                 major=base.get("major"), path=base.get("path"),
+                 detail=f"kicad-cli {base.get('version')}: PCB DRC supported")
 
 
 def probe_kiutils() -> dict[str, Any]:
@@ -402,6 +426,7 @@ def probe(
         "python": probe_python(),
         "ngspice": probe_ngspice(),
         "kicad-cli": probe_kicad_cli(kicad_cli),
+        "kicad-pcb-drc": probe_kicad_pcb_drc(kicad_cli),
         "kiutils": probe_kiutils(),
         "gh": probe_gh(),
     }
@@ -454,7 +479,7 @@ def render(probe_result: dict[str, Any], stages: list[str] | tuple[str, ...] | N
     python = probe_result.get("python", {})
     lines.append(f"  python       {'ok' if python.get('supported') else 'MISSING':<8} "
                  f"{python.get('detail', 'unknown')}")
-    for name in ("ngspice", "kicad-cli", "kiutils", "gh"):
+    for name in ("ngspice", "kicad-cli", "kicad-pcb-drc", "kiutils", "gh"):
         tool = probe_result.get("tools", {}).get(name, {})
         if tool.get("supported"):
             mark = "ok"
@@ -468,7 +493,7 @@ def render(probe_result: dict[str, Any], stages: list[str] | tuple[str, ...] | N
                  + (" (Termux)" if plat.get("termux") else ""))
 
     lines.extend(["", "Stages", ""])
-    for name in ("design", "simulate", "kicad-parse", "erc", "fab"):
+    for name in ("design", "simulate", "kicad-parse", "erc", "pcb-drc", "fab"):
         status = probe_result.get("stages", {}).get(name, {})
         if status.get("ok"):
             lines.append(f"  {name:<12} ready")
