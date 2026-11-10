@@ -391,6 +391,18 @@ def normalize_component(comp: dict[str, Any]) -> tuple[dict[str, Any], list[str]
     for key in ("footprint", "model", "notes", "params", "waveform"):
         if key in comp:
             out[key] = comp[key]
+    for key in ("part_number", "datasheet"):
+        if key in comp:
+            out[key] = str(comp[key])
+    if "no_connect_pins" in comp:
+        raw_no_connect = comp["no_connect_pins"]
+        if not isinstance(raw_no_connect, list):
+            raise ValueError(f"{ref}: no_connect_pins must be a list of pin numbers")
+        no_connect = {canonical_pin(ctype, pin) for pin in raw_no_connect}
+        unknown_no_connect = no_connect - set(pins)
+        if unknown_no_connect:
+            raise ValueError(f"{ref}: no_connect_pins references unknown pins: {sorted(unknown_no_connect)}")
+        out["no_connect_pins"] = sorted(no_connect)
     if "placement" in comp:
         placement = comp["placement"]
         if not isinstance(placement, dict) or set(placement) != {"x_mm", "y_mm"}:
