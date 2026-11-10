@@ -14,7 +14,9 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-# KiCad library identifiers are deliberately conservative defaults.
+# Offline fallback defaults only. The design agent should research each part's
+# datasheet and current KiCad library before selecting a footprint; a researched
+# per-component footprint in the spec takes precedence over these defaults.
 FOOTPRINTS = {
     "smd": {
         "R": "Resistor_SMD:R_0805_2012Metric",
@@ -30,7 +32,8 @@ FOOTPRINTS = {
         "ZENER": "Diode_SMD:D_SOD-123",
     },
     "through-hole": {
-        "R": "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+        # DIN0309 is the KiCad library's 0.5 W / 1/2 W axial resistor option.
+        "R": "Resistor_THT:R_Axial_DIN0309_L9.0mm_D3.2mm_P12.70mm_Horizontal",
         "C": "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm",
         "L": "Inductor_THT:L_Radial_D10.0mm_P5.00mm",
         "NPN": "Package_TO_SOT_THT:TO-92_Inline",
@@ -46,7 +49,11 @@ FOOTPRINTS = {
 
 
 def assign_common_footprints(spec: dict[str, Any], assembly: str) -> dict[str, str]:
-    """Fill missing component footprints; return ref -> assigned footprint."""
+    """Fill missing component footprints; return ref -> assigned footprint.
+
+    These are offline fallbacks. Research-backed footprints should be recorded
+    explicitly on each component in the spec and are never overwritten.
+    """
     if assembly not in FOOTPRINTS:
         raise ValueError("assembly must be 'smd' or 'through-hole'")
     defaults = FOOTPRINTS[assembly]
@@ -124,11 +131,11 @@ def main(argv: list[str] | None = None) -> int:
     assigned = assign_common_footprints(spec, assembly)
     if assigned:
         print(f"Assembly profile: {assembly}")
-        print("Auto-assigned common footprints:")
+        print("Auto-assigned offline fallback footprints:")
         for ref, footprint in assigned.items():
             print(f"  {ref}: {footprint}")
     else:
-        print(f"Assembly profile: {assembly}; no safe default assignments found.")
+        print(f"Assembly profile: {assembly}; no fallback assignments needed.")
 
     # Keep the temporary spec beside the original so relative model paths remain valid.
     with tempfile.NamedTemporaryFile(
@@ -145,8 +152,9 @@ def main(argv: list[str] | None = None) -> int:
         result = generate_main()
         if assigned:
             print(
-                "Note: inferred footprints are starting defaults only. "
-                "Verify package dimensions, polarity, pad numbering and datasheet pinouts."
+                "Note: offline fallback footprints are provisional. "
+                "Research actual package dimensions, polarity, pad numbering "
+                "and datasheet pinouts before fabrication."
             )
         return result
     finally:
