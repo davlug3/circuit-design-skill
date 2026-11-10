@@ -20,6 +20,11 @@ FOOTPRINTS = {
         "R": "Resistor_SMD:R_0805_2012Metric",
         "C": "Capacitor_SMD:C_0805_2012Metric",
         "L": "Inductor_SMD:L_0805_2012Metric",
+        "NPN": "Package_TO_SOT_SMD:SOT-23",
+        "PNP": "Package_TO_SOT_SMD:SOT-23",
+        "NMOS": "Package_TO_SOT_SMD:SOT-23",
+        "PMOS": "Package_TO_SOT_SMD:SOT-23",
+        "OPAMP": "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm",
         "D": "Diode_SMD:D_SOD-123",
         "LED": "LED_SMD:LED_0805_2012Metric",
         "ZENER": "Diode_SMD:D_SOD-123",
@@ -27,6 +32,12 @@ FOOTPRINTS = {
     "through-hole": {
         "R": "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
         "C": "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm",
+        "L": "Inductor_THT:L_Radial_D10.0mm_P5.00mm",
+        "NPN": "Package_TO_SOT_THT:TO-92_Inline",
+        "PNP": "Package_TO_SOT_THT:TO-92_Inline",
+        "NMOS": "Package_TO_SOT_THT:TO-220-3_Vertical",
+        "PMOS": "Package_TO_SOT_THT:TO-220-3_Vertical",
+        "OPAMP": "Package_DIP:DIP-8_W7.62mm",
         "D": "Diode_THT:D_DO-41_SOD81_P10.16mm_Horizontal",
         "LED": "LED_THT:LED_D3.0mm",
         "ZENER": "Diode_THT:D_DO-41_SOD81_P10.16mm_Horizontal",
@@ -99,8 +110,8 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         print("What is the primary assembly style?")
         print("  1) SMD (surface-mount)")
-        print("  2) Through-hole")
-        answer = input("Select [1/2]: ").strip().lower()
+        print("  2) Through-hole (preferred default)")
+        answer = input("Select [1/2, default 2]: ").strip().lower() or "2"
         choices = {"1": "smd", "s": "smd", "smd": "smd",
                    "2": "through-hole", "t": "through-hole",
                    "th": "through-hole", "through-hole": "through-hole"}
