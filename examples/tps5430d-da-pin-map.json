@@ -1,0 +1,37 @@
+{
+  "device": "Texas Instruments TPS5430",
+  "orderable_part": "TPS5430DDA",
+  "package": "DDA",
+  "package_description": "8-pin HSOIC with exposed thermal pad",
+  "datasheet": {
+    "document": "SLVS632",
+    "revision": "L",
+    "url": "https://www.ti.com/lit/ds/symlink/tps5430.pdf",
+    "section": "4, Pin Configuration and Functions"
+  },
+  "symbol": {
+    "component_type": "IC8",
+    "pin_numbers": [1, 2, 3, 4, 5, 6, 7, 8],
+    "pins": {
+      "1": {"name": "BOOT", "type": "output", "description": "High-side gate-driver bootstrap; connect 10 nF to PH."},
+      "2": {"name": "NC", "type": "no_connect", "description": "Not connected internally."},
+      "3": {"name": "NC", "type": "no_connect", "description": "Not connected internally."},
+      "4": {"name": "VSENSE", "type": "input", "description": "Feedback input; connect to output voltage divider."},
+      "5": {"name": "ENA", "type": "input", "description": "Active-high enable; below 0.5 V device stops switching."},
+      "6": {"name": "GND", "type": "ground", "description": "Ground return; connect to exposed pad."},
+      "7": {"name": "VIN", "type": "supply", "description": "Input supply."},
+      "8": {"name": "PH", "type": "switch_node", "description": "High-side MOSFET switch node; connects to inductor and catch diode."}
+    }
+  },
+  "exposed_pad": {
+    "package_terminal": "DAP",
+    "pin_number": null,
+    "net": "GND",
+    "required_connection": "Connect exposed pad to GND; TI specifies that GND pin 6 must be connected to DAP."
+  },
+  "limitations": [
+    "This file records the datasheet pin-function mapping; the generic IC8 generator still emits numbered pins only.",
+    "The exposed thermal pad is a separate package terminal and is not represented by the current eight-pin IC8 symbol.",
+    "This mapping does not establish PCB footprint correctness, electrical simulation, thermal performance, or hardware readiness."
+  ]
+}
