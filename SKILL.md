@@ -227,13 +227,16 @@ python3 scripts/generate_with_footprints.py specs/rc.json --out out/ --assembly 
 python3 scripts/generate_with_footprints.py specs/rc.json --out out/ --assembly through-hole
 ```
 
-The wrapper assigns common resistor, capacitor, inductor (SMD only), diode,
-zener and LED footprints where the package can be reasonably inferred. It
-preserves explicit component footprints and leaves package-dependent ICs and
-transistors unassigned rather than guessing. These are starting defaults:
-confirm dimensions, polarity and pad numbering against the exact part
-datasheet. Logical SPICE pins are not physical package pads; pin maps remain a
-separate, datasheet-backed decision.
+Through-hole is the preferred default (press Enter at the prompt). The
+wrapper assigns common resistor, capacitor, inductor, diode, zener, LED, BJT,
+MOSFET and op-amp footprints. SMD equivalents are available when selected.
+For ICs and transistors, it selects a common first-choice package (DIP-8 /
+SOIC-8, TO-92 / TO-220 / SOT-23) based on device class, not the exact
+manufacturer part. These are provisional layout defaults: verify the actual
+package, dimensions, polarity and pad numbering against the part datasheet
+before fabrication. Existing explicit footprints are preserved. Logical SPICE
+pins are not physical package pads; pin maps remain a separate, datasheet-backed
+decision.
 
 ```bash
 python3 scripts/generate_with_footprints.py specs/rc.json --out out/
