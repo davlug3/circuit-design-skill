@@ -37,7 +37,8 @@ class TestTPS5430PinMap(unittest.TestCase):
         self.assertEqual(pad["package_terminal"], "DAP")
         self.assertIsNone(pad["pin_number"])
         self.assertEqual(pad["net"], "GND")
-        self.assertIn("not represented", " ".join(mapping["limitations"]).lower())
+        self.assertEqual(pad["schematic_symbol_pin_number"], "9")
+        self.assertIn("internal placeholder", " ".join(mapping["limitations"]).lower())
 
     def test_mapping_does_not_claim_electrical_or_hardware_validation(self):
         mapping = json.loads(PIN_MAP.read_text(encoding="utf-8"))
