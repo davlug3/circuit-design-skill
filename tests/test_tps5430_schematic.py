@@ -56,14 +56,15 @@ class TestTPS5430Schematic(unittest.TestCase):
     def test_generated_schematic_maps_controller_and_power_stage_nets(self):
         schematic = kicad_schematic(self.spec)
         self.assertIn('"circuit:TPS5430"', schematic)
-        for net in ("BOOT", "FB", "ENA_FLOAT", "VIN", "SW", "OUT", "GND"):
+        for net in ("BOOT", "FB", "VIN", "SW", "OUT", "GND"):
             self.assertIn(f'(global_label "{net}"', schematic)
-        self.assertIn('(no_connect (at ', schematic)
+        self.assertEqual(schematic.count("(no_connect (at "), 3)
         self.assertIn('(number "9"', schematic)
         # Pin 9 (DAP) and pin 6 (GND) share the same net.
         u1 = next(comp for comp in self.spec["components"] if comp["ref"] == "U1")
         self.assertEqual(u1["pins"]["6"], "GND")
         self.assertEqual(u1["pins"]["9"], "GND")
+        self.assertEqual(u1["no_connect_pins"], ["2", "3", "5"])
         # Catch diode orientation and bootstrap capacitor are explicit.
         d1 = next(comp for comp in self.spec["components"] if comp["ref"] == "D1")
         c2 = next(comp for comp in self.spec["components"] if comp["ref"] == "C2")
