@@ -8,7 +8,7 @@ from generate_with_footprints import assign_common_footprints
 
 
 class TestCommonFootprints(unittest.TestCase):
-    def test_smd_defaults_cover_common_passives_and_diodes(self):
+    def test_smd_defaults_only_cover_common_passives_and_mark_them_provisional(self):
         spec = {"components": [
             {"ref": "R1", "type": "R"},
             {"ref": "C1", "type": "C"},
@@ -21,9 +21,12 @@ class TestCommonFootprints(unittest.TestCase):
         assigned = assign_common_footprints(spec, "smd")
         self.assertEqual(assigned["R1"], "Resistor_SMD:R_0805_2012Metric")
         self.assertEqual(assigned["C1"], "Capacitor_SMD:C_0805_2012Metric")
-        self.assertEqual(assigned["D1"], "Diode_SMD:D_SOD-123")
-        self.assertEqual(assigned["Q1"], "Package_TO_SOT_SMD:SOT-23")
-        self.assertEqual(assigned["U1"], "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm")
+        self.assertNotIn("D1", assigned)
+        self.assertNotIn("LED1", assigned)
+        self.assertNotIn("Q1", assigned)
+        self.assertNotIn("U1", assigned)
+        self.assertEqual(spec["components"][0]["footprint_status"], "provisional")
+        self.assertFalse(spec["components"][0]["pad_map_verified"])
 
     def test_through_hole_defaults(self):
         spec = {"components": [
@@ -35,10 +38,10 @@ class TestCommonFootprints(unittest.TestCase):
         ]}
         assigned = assign_common_footprints(spec, "through-hole")
         self.assertIn("P7.62mm", assigned["R1"])
-        self.assertEqual(assigned["LED1"], "LED_THT:LED_D3.0mm")
+        self.assertNotIn("LED1", assigned)
         self.assertIn("L1", assigned)
-        self.assertEqual(assigned["Q1"], "Package_TO_SOT_THT:TO-92_Inline")
-        self.assertEqual(assigned["U1"], "Package_DIP:DIP-8_W7.62mm")
+        self.assertNotIn("Q1", assigned)
+        self.assertNotIn("U1", assigned)
 
     def test_existing_footprint_is_preserved(self):
         spec = {"components": [
