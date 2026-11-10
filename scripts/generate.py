@@ -703,8 +703,11 @@ def bom_rows(spec: dict[str, Any]) -> list[dict[str, str]]:
 def bom_csv(spec: dict[str, Any]) -> str:
     rows = bom_rows(spec)
     buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=["References", "Qty", "Type", "Value",
-                                             "Footprint", "Notes"], lineterminator="\n")
+    writer = csv.DictWriter(buf, fieldnames=[
+        "References", "Qty", "Type", "Value", "Manufacturer", "MPN", "Package",
+        "Footprint", "Footprint status", "Pad map verified", "Datasheet URL",
+        "Datasheet revision", "Sourcing URL", "Footprint evidence", "Notes",
+    ], lineterminator="\n")
     writer.writeheader()
     writer.writerows(rows)
     return buf.getvalue()
