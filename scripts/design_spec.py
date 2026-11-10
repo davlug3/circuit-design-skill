@@ -1217,8 +1217,10 @@ def validate_spec(spec: dict[str, Any], base_dir: str | Path | None = None) -> d
     ground = norm["ground"]
     if ground not in nets:
         errors.append(f"ground net {ground!r} is not connected to any component")
-    if not any(c["type"] in ("V", "I") for c in comps):
-        errors.append("at least one independent source (V or I) is required for simulation")
+    if ({"spice", "ltspice_asc"} & set(norm["deliverables"])) and not any(
+        c["type"] in ("V", "I") for c in comps
+    ):
+        errors.append("at least one independent source (V or I) is required for simulation deliverables")
 
     # Nets with only one pin are almost always a wiring mistake, except for
     # explicit test points / hierarchical labels.
