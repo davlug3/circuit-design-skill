@@ -41,7 +41,7 @@ from circuit_common import (  # noqa: E402
 
 SCHEMA_VERSION = "1.0"
 SUPPORTED_TYPES = {"R", "C", "L", "V", "I", "D", "LED", "ZENER", "NPN", "PNP",
-                   "NMOS", "PMOS", "OPAMP", "SW", "E", "G", "IC8"}
+                   "NMOS", "PMOS", "OPAMP", "SW", "E", "G", "IC8", "TPS5430"}
 DELIVERABLES = {"spice", "ltspice_asc", "kicad_net", "kicad_sch", "bom", "report"}
 # "pcb" is opt-in: it needs board dimensions and is not part of the electrical
 # deliverables.  Keep it out of DELIVERABLES so the default set is unchanged.
@@ -123,7 +123,7 @@ REQUIRED_PINS: dict[str, set[str]] = {
     "NMOS": {"1", "2", "3"}, "PMOS": {"1", "2", "3"},
     "OPAMP": {"1", "2", "5"}, "SW": {"1", "2", "3", "4"},
     "E": {"1", "2", "3", "4"}, "G": {"1", "2", "3", "4"},
-    "IC8": {"1", "2", "3", "4", "5", "6", "7", "8"},
+    "IC8": {"1", "2", "3", "4", "5", "6", "7", "8"},\n    "TPS5430": {"1", "2", "3", "4", "5", "6", "7", "8", "9"},
 }
 
 
