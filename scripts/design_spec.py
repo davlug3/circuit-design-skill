@@ -1147,6 +1147,11 @@ def validate_spec(spec: dict[str, Any], base_dir: str | Path | None = None) -> d
         errors.append("name may contain only letters, digits, dot, underscore and hyphen")
 
     comps = norm["components"]
+    if any(c["type"] == "IC8" for c in comps):
+        unsupported = set(norm["deliverables"]) & {"spice", "ltspice_asc", "pcb"}
+        if unsupported:
+            errors.append("IC8 is currently a schematic-only placeholder; unsupported deliverables: " + ", ".join(sorted(unsupported)))
+        warnings.append("IC8 pins are numbered only; add a verified device-specific pin-function map before treating the schematic as an electrical design")
     refs: set[str] = set()
     nets: dict[str, list[str]] = {}
     for comp in comps:
