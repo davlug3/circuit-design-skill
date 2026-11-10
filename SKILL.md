@@ -216,11 +216,30 @@ accepting it. See `references/optimization.md`.
 
 ### 5. Generate
 
+For KiCad or PCB outputs, use the assembly-aware wrapper. It asks whether the
+design is primarily SMD or through-hole, then fills only missing footprints
+with conservative common defaults before calling the normal generator:
+
 ```bash
-python3 scripts/generate.py specs/rc.json --out out/
-python3 scripts/generate.py specs/rc.json --out out/ --formats spice,ltspice_asc,kicad_sch
-python3 scripts/generate.py specs/rc.json --out out/ --ltspice-version 4.1
-python3 scripts/generate.py specs/rc.json --out out/ --pcb-board 50x40
+python3 scripts/generate_with_footprints.py specs/rc.json --out out/
+# Non-interactive use:
+python3 scripts/generate_with_footprints.py specs/rc.json --out out/ --assembly smd
+python3 scripts/generate_with_footprints.py specs/rc.json --out out/ --assembly through-hole
+```
+
+The wrapper assigns common resistor, capacitor, inductor (SMD only), diode,
+zener and LED footprints where the package can be reasonably inferred. It
+preserves explicit component footprints and leaves package-dependent ICs and
+transistors unassigned rather than guessing. These are starting defaults:
+confirm dimensions, polarity and pad numbering against the exact part
+datasheet. Logical SPICE pins are not physical package pads; pin maps remain a
+separate, datasheet-backed decision.
+
+```bash
+python3 scripts/generate_with_footprints.py specs/rc.json --out out/
+python3 scripts/generate_with_footprints.py specs/rc.json --out out/ --formats spice,ltspice_asc,kicad_sch
+python3 scripts/generate_with_footprints.py specs/rc.json --out out/ --ltspice-version 4.1
+python3 scripts/generate_with_footprints.py specs/rc.json --out out/ --pcb-board 50x40
 ```
 
 Every semiconductor needs a real model before the simulation means anything:
@@ -275,7 +294,7 @@ WIDTHxHEIGHT`, or add `pcb` to `--formats`. The handoff needs a board size; it
 does not guess one.
 
 ```bash
-python3 scripts/generate.py specs/rc.json --out out/ --pcb-board 50x40
+python3 scripts/generate_with_footprints.py specs/rc.json --out out/ --pcb-board 50x40
 python3 scripts/pcb_handoff.py specs/rc.json --out out/ --board 50x40
 ```
 
