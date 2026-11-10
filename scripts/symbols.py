@@ -282,9 +282,14 @@ def _lib_symbol(ctype: str) -> str:
         graphics.append(_rect(-2.54, -2.54, 2.54, 2.54))
     elif ctype == "IC8":
         graphics.append(_rect(-5.08, -6.35, 5.08, 6.35))
+    elif ctype == "TPS5430":
+        graphics += [_rect(-5.08, -6.35, 5.08, 6.35),
+                     _rect(-1.905, -1.905, 1.905, 1.905)]
 
+    pin_names = KICAD_PIN_NAMES.get(ctype, {})
+    pin_types = KICAD_PIN_TYPES.get(ctype, {})
     pin_text = "\n".join(
-        _pin(num, "~", x, y, angle, length)
+        _pin(num, pin_names.get(num, "~"), x, y, angle, length, pin_types.get(num, "passive"))
         for num, (x, y, angle, length) in pins.items()
     )
     unit_graphics = "\n".join(graphics)
