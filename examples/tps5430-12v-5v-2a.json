@@ -190,9 +190,27 @@
       }
     ],
     "risks": [
-      "No exact orderable passives or footprints have been frozen.",
-      "Thermal performance, loop stability, ripple and load-step response have not been verified.",
-      "DAP pad-to-footprint mapping requires package CAD confirmation."
+      {
+        "id": "RK1",
+        "risk": "The DDA exposed pad schematic pin identifier is provisional until matched to the chosen package land pattern.",
+        "severity": "high",
+        "mitigation": "Keep PCB generation disabled and do not assign a footprint.",
+        "verification": "Compare the selected TI or vendor package CAD and land-pattern drawing before PCB work."
+      },
+      {
+        "id": "RK2",
+        "risk": "Passives are reference values, not finalized orderable parts with verified stress margins.",
+        "severity": "medium",
+        "mitigation": "Select exact parts and check bias, RMS, saturation, thermal and tolerance ratings.",
+        "verification": "Complete component-level calculations against the finalized input/load/ambient envelope."
+      },
+      {
+        "id": "RK3",
+        "risk": "Thermal, loop stability, transient and EMI performance have not been validated.",
+        "severity": "high",
+        "mitigation": "Do not release for construction; plan simulation and bench tests.",
+        "verification": "Complete model correlation and measured bench test plan on a reviewed PCB revision."
+      }
     ]
   }
 }
