@@ -667,6 +667,8 @@ def _bom_value(comp: dict[str, Any]) -> str:
         return f"{comp.get('model', 'generic')}"
     if ctype in ("NPN", "PNP", "NMOS", "PMOS", "SW", "OPAMP"):
         return f"{comp.get('model', 'generic')}"
+    if ctype == "TPS5430":
+        return str(comp.get("part_number", "TPS5430DDA"))
     return _fmt(comp["value"])
 
 
