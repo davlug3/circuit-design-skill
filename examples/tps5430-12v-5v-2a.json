@@ -212,6 +212,23 @@
         "mitigation": "Do not release for construction; plan simulation and bench tests.",
         "verification": "Complete model correlation and measured bench test plan on a reviewed PCB revision."
       }
+    ],
+    "sources": [
+      {
+        "title": "Texas Instruments TPS5430, TPS5431 datasheet, SLVS632 Rev. L",
+        "url": "https://www.ti.com/lit/ds/symlink/tps5430.pdf",
+        "revision": "L",
+        "sections": [
+          "4 Pin Configuration and Functions",
+          "7.2.1 Design Requirements"
+        ],
+        "supports": [
+          "TPS5430DDA pin names and numbers",
+          "DAP-to-GND connection",
+          "BOOT capacitor connection",
+          "ENA floating behavior"
+        ]
+      }
     ]
   }
 }
