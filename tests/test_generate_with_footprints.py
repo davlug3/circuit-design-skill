@@ -34,7 +34,7 @@ class TestCommonFootprints(unittest.TestCase):
             {"ref": "U1", "type": "OPAMP"},
         ]}
         assigned = assign_common_footprints(spec, "through-hole")
-        self.assertIn("P7.62mm", assigned["R1"])
+        self.assertIn("P12.70mm", assigned["R1"])\n        self.assertIn("DIN0309", assigned["R1"])
         self.assertEqual(assigned["LED1"], "LED_THT:LED_D3.0mm")
         self.assertIn("L1", assigned)
         self.assertEqual(assigned["Q1"], "Package_TO_SOT_THT:TO-92_Inline")
