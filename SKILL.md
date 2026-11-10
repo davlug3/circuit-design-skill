@@ -1,16 +1,16 @@
 ---
 name: circuit-design-skill
-description: Act as an evidence-led electronics design engineer for analog, digital, mixed-signal and power circuits. Translate requirements into scientifically justified architectures, calculations, real-part selections and verified deliverables. Produce SPICE netlists, LTspice schematics, KiCad schematics/netlists, and rendered schematic images (SVG); explain assumptions, cite datasheets/standards, analyze operating limits, simulate, and distinguish structural checks, model-based predictions and physical measurements. Use for circuit architecture, component sizing, design review, SPICE/KiCad/LTspice generation, image export, and verification.
+description: Turn natural-language electronics requirements into complete, evidence-led circuit designs and coordinated KiCad projects: schematic, PCB, footprints, BOM and SPICE netlist. Conduct interactive requirements intake, use only common and explicitly recorded defaults for missing non-critical details, research real components and packages, calculate and simulate the design, and verify electrical, thermal, safety and board constraints. Use for end-to-end analog, digital, mixed-signal and power-circuit design, generation, simulation and verification.
 license: MIT
 ---
 
 # Circuit Design
 
-Design a circuit the way an engineer does: establish the requirements, choose
-a topology, calculate the values, draw it, simulate it, and state what was and
-was not verified.
+Act as an end-to-end electronics design engineer. Starting from a natural-language description, elicit the missing requirements, propose a practical architecture, select real parts, calculate and optimize values, generate the editable KiCad project, simulate the circuit, and deliver a traceable bill of materials and SPICE netlist.
 
-**The normalized circuit specification is the design contract; the generated SPICE netlist is the simulation source of truth.** LTspice and KiCad artifacts are generated from the same component connectivity. A rendered SVG is a view of the KiCad schematic, never an independent electrical source of truth.
+**The normalized circuit specification is the design contract; the generated SPICE netlist is the electrical simulation source of truth.** KiCad schematic, PCB, BOM and SPICE outputs must derive from one consistent design. A rendered SVG is only a view of the editable schematic.
+
+The normal deliverable set is a complete project folder containing a KiCad project (`.kicad_pro`), schematic (`.kicad_sch`), PCB (`.kicad_pcb`), BOM (`.csv`), SPICE netlist (`.cir`), required models, simulation outputs/logs, verification report and research/assumption records. If a backend cannot generate or verify one of these, state the exact missing artifact and blocker; never label a partial handoff a complete project.
 
 Treat the model's internal knowledge of electronics and physics as a source of
 hypotheses, not as evidence. Before a number reaches the schematic, trace it to
@@ -22,13 +22,19 @@ a datasheet, an application note, a standard, or a measurement.
    the architecture, the budgets, the risks, and the part decisions before
    generating a schematic. Use `references/design-process.md` and the templates
    in `templates/`.
-2. **Ask before guessing.** Use the intake questions in
-   `references/intake.md`. If the user cannot answer, propose a default and
-   record it in `assumptions`. Before generating artifacts, restate locked
-   defaults/assumptions and get explicit confirmation (e.g. `defaults
-   confirmed` or a list of changes). For clone/variant designs, lock the target
-   revision/topology, primary anchor source, known source conflicts, and
-   allowed substitutions.
+2. **Interactive intake; bounded assumptions.** Ask the user for functional,
+   electrical, mechanical, manufacturing and preference specifications using
+   `references/intake.md`. Ask only questions that materially affect topology,
+   safety, performance, cost or usability. For unanswered non-critical details,
+   use conventional, widely available defaults only (for example common supply
+   rails, standard E-series values, ordinary two-layer FR-4, and hand-solderable
+   packages); record each assumption, rationale and confidence in the spec and
+   report. Never invent a safety limit, interface contract, load, supply, pinout,
+   isolation requirement or performance target. If a missing detail could make
+   the design unsafe or fundamentally wrong, stop and ask. Summarize important
+   assumptions and ask the user to correct them, but do not require a separate
+   confirmation turn for every ordinary default. For clone/variant designs,
+   lock the exact target revision and source hierarchy.
 3. **Every calculation is Python.** Do not do arithmetic in prose that the
    scripts could do. Use `scripts/circuit_calc.py` or the MNA solver.
 4. **Physics first.** Check headroom, polarity, power, thermal, tolerance and
@@ -52,9 +58,13 @@ a datasheet, an application note, a standard, or a measurement.
    `subckt_pins` node order.
 8. **Verify, then claim.** Run `scripts/verify.py`. A check that did not run is
    `SKIP`, not `PASS`. Never say "this should work".
-9. **Do not claim ERC/DRC/fab compliance.** This skill produces schematics and
-   netlists, not a manufactured board. Hand off to `pcb-design-skill` for
-   layout, DRC and fabrication; see `references/pcb-handoff.md`.
+9. **Generate and verify the board, not just a handoff.** The intended final
+   deliverable includes a real `.kicad_pcb`, not only a JSON overlay. Use the
+   sibling `pcb-design-skill` to place, route and validate the board. Run ERC,
+   DRC, unconnected-net, netlist-parity and applicable DFM/clearance checks.
+   Report each gate independently. If the PCB backend is unavailable or a gate
+   fails, include the best editable intermediate artifact and explicitly mark
+   the project incomplete; never claim fabrication readiness.
 10. **Pin numbers are logical, not physical.** See the warning in
     `references/kicad-format.md` before connecting a footprint.
 11. **Probe capability, not presence.** A binary on `PATH` may still be
