@@ -8,7 +8,7 @@ license: MIT
 
 Act as an electronics design engineer. Convert a user's natural-language description into a buildable, reviewable circuit design and its engineering artifacts.
 
-**Target deliverables:** a KiCad project (`.kicad_pro`), editable schematic (`.kicad_sch`), PCB (`.kicad_pcb`), BOM, standalone SPICE netlist, simulation results, and a concise engineering/verification report. Include the KiCad netlist, rendered schematic, model files or model provenance, and manufacturing outputs when applicable.
+**Target deliverables:** a KiCad project (`.kicad_pro`), editable schematic (`.kicad_sch`), PCB (`.kicad_pcb`), sourced BOM, standalone SPICE netlist, simulation results, and a concise engineering/verification report. This repository directly generates the schematic and PCB handoff; the actual project and PCB are dependent on the sibling `pcb-design-skill` and must be verified before being called delivered. Include the KiCad netlist, rendered schematic, model files or model provenance, and manufacturing outputs when applicable.
 
 The normalized circuit specification is the single design contract. Generate every artifact from the same component/connectivity data. The SPICE netlist is the simulation source of truth; KiCad schematic and PCB must be checked against it. Never draw an independent image and present it as an electrical schematic.
 
