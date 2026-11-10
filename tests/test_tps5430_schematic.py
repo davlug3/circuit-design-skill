@@ -80,6 +80,13 @@ class TestTPS5430Schematic(unittest.TestCase):
         self.assertEqual(d1["pins"], {"1": "GND", "2": "SW"})
         self.assertEqual(c2["pins"], {"1": "BOOT", "2": "SW"})
 
+    def test_reference_design_has_structured_bench_validation_plan(self):
+        measurements = self.spec["design"]["measurements"]
+        self.assertEqual({item["id"] for item in measurements}, {"M1", "M2", "M3", "M4", "M5"})
+        self.assertTrue(all(item["requirement"] in {"R1", "R2"} for item in measurements))
+        self.assertTrue(all(item["test_point"] and item["equipment"] and item["acceptance"] for item in measurements))
+        self.assertTrue(any("not yet established" in item["acceptance"] for item in measurements))
+
     def test_pin_map_matches_current_ti_datasheet_revision(self):
         mapping = json.loads(PIN_MAP_PATH.read_text(encoding="utf-8"))
         self.assertEqual(mapping["datasheet"]["document"], "SLVS632")
