@@ -703,7 +703,7 @@ def _extra_components(spec: dict[str, Any]) -> tuple[list[dict[str, Any]], list[
     if not isinstance(raw, list):
         raise ValueError("pcb.extra_components must be a list")
     warnings: list[str] = []
-    allowed = {"ref", "value", "footprint", "at", "pads", "dnp", "properties"}
+    allowed = {"ref", "value", "footprint", "at", "pads", "dnp", "properties", "board_only"}
     result: list[dict[str, Any]] = []
     for item in raw:
         if not isinstance(item, dict):
@@ -721,6 +721,7 @@ def _extra_components(spec: dict[str, Any]) -> tuple[list[dict[str, Any]], list[
             "value": str(item.get("value", "")),
             "footprint": str(item.get("footprint", "")),
             "dnp": bool(item.get("dnp", False)),
+            "board_only": bool(item.get("board_only", False)),
         }
         pads = item.get("pads")
         if not isinstance(pads, dict):
