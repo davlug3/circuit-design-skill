@@ -178,8 +178,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends ngspice
           # The KiCad PPA lookup hits Launchpad and intermittently times out on
-          # hosted runners. Retry with a hard timeout, then fall back to the
-          # distro package so the simulation/design gates can still run.
+          # hosted runners. Retry with a hard timeout; if it stays unavailable,
+          # skip KiCad-dependent steps (simulation/design gates still run). Do
+          # not fall back to distro kicad: older versions cannot read KiCad 9
+          # schematic files and would fail misleadingly.
           ppa_ok=0
           for attempt in 1 2 3; do
             if timeout 180 sudo add-apt-repository --yes ppa:kicad/kicad-9.0-releases; then
@@ -193,14 +195,10 @@ jobs:
             sudo apt-get update || true
             sudo apt-get install --yes --no-install-recommends kicad || true
           fi
-          if ! command -v kicad-cli >/dev/null 2>&1; then
-            echo "::warning::KiCad 9 PPA unavailable; trying distro kicad"
-            sudo apt-get install --yes --no-install-recommends kicad || true
-          fi
           if command -v kicad-cli >/dev/null 2>&1; then
             kicad-cli version
           else
-            echo "::warning::kicad-cli unavailable; KiCad-dependent checks will skip"
+            echo "::warning::KiCad 9 PPA unavailable; KiCad-dependent checks will skip"
           fi
           ngspice -v | head -3
 
@@ -225,6 +223,10 @@ jobs:
           shopt -s nullglob
           if ! command -v kicad-cli >/dev/null 2>&1; then
             echo "::warning::kicad-cli unavailable; schematic image export skipped"
+            exit 0
+          fi
+          if ! kicad-cli version 2>/dev/null | grep -qE '^9\.'; then
+            echo "::warning::kicad-cli is not KiCad 9; schematic image export skipped"
             exit 0
           fi
           schematics=(out/*.kicad_sch)
