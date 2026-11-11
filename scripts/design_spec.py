@@ -846,7 +846,7 @@ def validate_pcb(spec: dict[str, Any], comps: list[dict[str, Any]],
                 if not isinstance(footprint, str) or not footprint:
                     errors.append(f"pcb.extra_components {ref} needs a footprint")
                 pads = item.get("pads")
-                if not isinstance(pads, dict) or not pads:
+                if not isinstance(pads, dict):
                     errors.append(f"pcb.extra_components {ref} needs a pads object")
                 else:
                     for pad, net_name in pads.items():

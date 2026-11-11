@@ -197,7 +197,9 @@ complete converter schematic. Replace the ideal parts before layout.
 
 Extra board-only parts (connectors, mounting holes, test points) go in
 `pcb.extra_components`. They are added to the pin map's `exclude` so the PCB
-importer keeps them even though they are absent from the SPICE netlist.
+importer keeps them even though they are absent from the SPICE netlist. A
+mechanical part such as a mounting hole declares `"pads": {}` because it has no
+electrical connection; every pad that does exist must name a net.
 
 ## What the handoff does not do
 

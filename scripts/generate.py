@@ -1073,7 +1073,7 @@ def generate(spec_path: str | Path, outdir: str | Path,
 
         pcb_summary = pcb_handoff.write_handoff(
             spec, out, board=pcb_board, profile=pcb_profile,
-            layers=pcb_layers, pcb_skill=pcb_skill,
+            layers=pcb_layers, pcb_skill=pcb_skill, base_dir=base_dir,
         )
         for kind in ("overlay", "pin_map", "node_aliases", "handoff"):
             if kind in pcb_summary.get("files", {}):

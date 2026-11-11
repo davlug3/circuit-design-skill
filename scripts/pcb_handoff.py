@@ -382,8 +382,11 @@ def build_pin_map(spec: dict[str, Any],
         normalised_refs[element] = normalised
     refs = normalised_refs
 
+    # KiCad's Device:D and Device:LED symbols number pin 1 = K (cathode) and
+    # pin 2 = A (anode). SPICE diode nodes are (anode, cathode), so the default
+    # footprint pad order is 2,1 -- not 1,2.
     normalised_defaults: dict[str, Any] = {
-        "R": ["1", "2"], "C": ["1", "2"], "L": ["1", "2"], "D": ["1", "2"],
+        "R": ["1", "2"], "C": ["1", "2"], "L": ["1", "2"], "D": ["2", "1"],
     }
     default_type = {"R": "R", "C": "C", "L": "L", "D": "D",
                     "Q": "NPN", "M": "NMOS", "J": "NMOS",
@@ -720,8 +723,10 @@ def _extra_components(spec: dict[str, Any]) -> tuple[list[dict[str, Any]], list[
             "dnp": bool(item.get("dnp", False)),
         }
         pads = item.get("pads")
-        if not isinstance(pads, dict) or not pads:
+        if not isinstance(pads, dict):
             raise ValueError(f"pcb.extra_components {ref} needs a pads object")
+        # An empty pads object is valid for mechanical parts such as mounting
+        # holes, which have no electrical connection.
         entry["pads"] = {str(pad): str(net) for pad, net in pads.items()}
         if "at" in item:
             at = item["at"]
@@ -743,7 +748,8 @@ def _extra_components(spec: dict[str, Any]) -> tuple[list[dict[str, Any]], list[
 
 def build_overlay(spec: dict[str, Any], *, board: dict[str, Any], profile: str,
                   pin_map: dict[str, Any], aliases: dict[str, str],
-                  skill_dir: Path | None) -> tuple[dict[str, Any], list[str]]:
+                  skill_dir: Path | None,
+                  base_dir: str | Path | None = None) -> tuple[dict[str, Any], list[str]]:
     pcb = spec.get("pcb") or {}
     warnings: list[str] = []
     include_sw = set(pin_map.get("include") or [])
@@ -806,7 +812,7 @@ def build_overlay(spec: dict[str, Any], *, board: dict[str, Any], profile: str,
         assumptions.append(
             "Ideal switches and simulation sources are excluded from the board."
         )
-    status = model_status(spec)
+    status = model_status(spec, base_dir=base_dir)
     if status.startswith("unverified"):
         assumptions.append(f"Semiconductor models are {status}.")
 
@@ -971,9 +977,10 @@ def _handoff_markdown(spec: dict[str, Any], summary: dict[str, Any]) -> str:
 def write_handoff(spec: dict[str, Any], outdir: str | Path,
                   *, board: str | None = None, profile: str | None = None,
                   layers: int | None = None,
-                  pcb_skill: str | Path | None = None) -> dict[str, Any]:
+                  pcb_skill: str | Path | None = None,
+                  base_dir: str | Path | None = None) -> dict[str, Any]:
     """Write the PCB overlay, pin map, node aliases and handoff document."""
-    report = validate_spec(spec)
+    report = validate_spec(spec, base_dir=base_dir)
     if not report["ok"]:
         raise ValueError(
             "invalid design spec: " + "; ".join(report["errors"])
@@ -1027,7 +1034,7 @@ def write_handoff(spec: dict[str, Any], outdir: str | Path,
     })
     overlay, overlay_warnings = build_overlay(
         spec, board=board_data, profile=profile_name, pin_map=pin_map,
-        aliases=aliases, skill_dir=skill_dir,
+        aliases=aliases, skill_dir=skill_dir, base_dir=base_dir,
     )
 
     warnings = list(report.get("warnings", []))
@@ -1107,7 +1114,7 @@ def write_handoff(spec: dict[str, Any], outdir: str | Path,
         "command": command,
         "command_no_ask": command_no_ask,
         "run_hint": run_hint,
-        "simulation_status": model_status(spec),
+        "simulation_status": model_status(spec, base_dir=base_dir),
     }
     (out / files["handoff"]).write_text(
         _handoff_markdown(spec, summary), encoding="utf-8"
@@ -1139,6 +1146,7 @@ def main(argv: list[str] | None = None) -> int:
         summary = write_handoff(
             spec, ns.out, board=ns.board, profile=ns.profile,
             layers=ns.layers, pcb_skill=ns.pcb_skill,
+            base_dir=Path(ns.spec).resolve().parent,
         )
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"error: {exc}", file=sys.stderr)

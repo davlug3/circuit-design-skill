@@ -55,6 +55,37 @@ class TestPcbExample(unittest.TestCase):
             self.assertTrue(pcb_check["ok"], pcb_check["detail"])
 
 
+class TestDiodePinMap(unittest.TestCase):
+    def test_diode_default_maps_anode_to_pad_two(self):
+        spec = {
+            "name": "diode_default",
+            "components": [
+                {"ref": "D1", "type": "D", "pins": {"1": "A_NET", "2": "K_NET"}},
+            ],
+        }
+        pin_map, _needs, _warnings = pcb_handoff.build_pin_map(spec)
+        # KiCad Device:D/LED pads are 1=K, 2=A; SPICE nodes are (anode, cathode).
+        self.assertEqual(pin_map["defaults"]["D"], ["2", "1"])
+
+
+class TestMechanicalExtraComponent(unittest.TestCase):
+    def test_mounting_hole_may_have_empty_pads(self):
+        spec = {
+            "pcb": {
+                "extra_components": [
+                    {
+                        "ref": "H1",
+                        "value": "M3 mounting hole",
+                        "footprint": "MountingHole:MountingHole_3.2mm_M3",
+                        "pads": {},
+                    },
+                ],
+            },
+        }
+        extra, _warnings = pcb_handoff._extra_components(spec)
+        self.assertEqual(extra[0]["pads"], {})
+
+
 class TestPcbHandoff(unittest.TestCase):
     def _skill(self) -> Path:
         skill = pcb_handoff.find_pcb_skill()
