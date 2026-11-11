@@ -798,7 +798,22 @@ def _simulate_ngspice(netlist: Path) -> tuple[Check, dict[str, ngspice_raw.Plot]
         except (OSError, subprocess.TimeoutExpired) as exc:
             return Check("ngspice", False, f"ngspice could not run: {exc}"), {}, ""
         log_text = log.read_text(errors="replace") if log.exists() else ""
-        text = log_text + proc.stdout + proc.stderr
+        # ngspice ignores .four when a rawfile is requested.  Re-run without
+        # -r so a declared thd_percent metric can read the Fourier block.
+        fourier_text = ""
+        if ".fourier line ignored" in log_text.lower():
+            flog = Path(td) / "ngspice-fourier.log"
+            try:
+                subprocess.run(
+                    [exe, "-b", "-o", str(flog), str(netlist)],
+                    capture_output=True, text=True, timeout=120,
+                    env={**os.environ},
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+            if flog.exists():
+                fourier_text = flog.read_text(errors="replace")
+        text = log_text + fourier_text + proc.stdout + proc.stderr
         evidence = {
             "returncode": proc.returncode,
             "stderr": (proc.stderr or "")[-1500:],

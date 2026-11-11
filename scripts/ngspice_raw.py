@@ -188,7 +188,7 @@ def find_plot(plots: dict[str, Plot], kind: str) -> Plot | None:
                 plot.is_complex and plot.variables
                 and plot.variables[0].lower() == "frequency")):
             return plot
-        if kind == "tran" and ("transient" in low or "tran" in low):
+        if kind == "tran" and re.search(r"\btran(?:sient)?\b", low):
             return plot
         if kind == "noise" and "noise" in low:
             return plot

@@ -130,6 +130,41 @@ class TestVerifyExamples(unittest.TestCase):
             self.assertIn("WRONG", check.detail)
 
 
+class TestNgspiceFourierFallback(unittest.TestCase):
+    def test_fourier_rerun_without_rawfile(self):
+        # ngspice ignores .four when -r is present.  The simulator must run a
+        # second time without -r so a declared thd_percent metric can read the
+        # Fourier block, while the rawfile run still supplies the plots.
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        calls = []
+
+        def fake_run(args, **kwargs):
+            calls.append(list(args))
+            out = Path(args[args.index("-o") + 1])
+            if "-r" in args:
+                out.write_text(".fourier line ignored since rawfile was produced\n")
+                Path(args[args.index("-r") + 1]).write_text("")
+            else:
+                out.write_text(
+                    "Fourier analysis for v(out):\n"
+                    "  THD: 1.234567 %\n"
+                )
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        with tempfile.TemporaryDirectory() as td:
+            netlist = Path(td) / "n.cir"
+            netlist.write_text("* test\n")
+            with patch.object(verify.env_probe, "probe_ngspice",
+                              return_value={"supported": True, "ok": True,
+                                            "path": "/usr/bin/ngspice"}), \
+                 patch.object(verify.subprocess, "run", side_effect=fake_run):
+                check, plots, text = verify._simulate_ngspice(netlist)
+        self.assertEqual(len(calls), 2)
+        self.assertIn("THD: 1.234567 %", text)
+
+
 class TestScaffoldVerification(unittest.TestCase):
     def test_bjt_scaffold_skips_nonlinear(self):
         with tempfile.TemporaryDirectory() as td:

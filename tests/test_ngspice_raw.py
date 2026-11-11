@@ -77,6 +77,19 @@ Values:
 \t2.000000000000000e-09
 """
 
+DC_TRANSFER = """Title: sweep
+Plotname: DC transfer characteristic
+Flags: real
+No. Variables: 2
+No. Points: 1
+Variables:
+\t0\tv-sweep\tvoltage
+\t1\tv(out)\tvoltage
+Values:
+0\t0.000000000000000e+00
+\t1.000000000000000e+00
+"""
+
 TRUNCATED = """Title: broken
 Plotname: AC Analysis
 Flags: complex
@@ -171,6 +184,15 @@ class TestAsciiRaw(unittest.TestCase):
         self.assertEqual(find_plot(plots, "tran").name, "Transient Analysis")
         self.assertEqual(find_plot(plots, "noise").name, "Noise Analysis")
         self.assertIsNone(find_plot(plots, "missing"))
+
+    def test_find_plot_tran_ignores_dc_transfer_characteristic(self):
+        # "DC transfer characteristic" contains "tran"; a naive substring
+        # match returned it as the transient plot and broke time-domain
+        # metrics.  The word-boundary match must skip it.
+        only_dc = parse_raw(DC_TRANSFER)
+        self.assertIsNone(find_plot(only_dc, "tran"))
+        mixed = parse_raw(OP_AC + DC_TRANSFER + TRAN)
+        self.assertEqual(find_plot(mixed, "tran").name, "Transient Analysis")
 
 
 if __name__ == "__main__":
