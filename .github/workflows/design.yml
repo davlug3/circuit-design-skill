@@ -174,10 +174,34 @@ jobs:
 
       - name: Install KiCad 9 and ngspice
         run: |
-          sudo add-apt-repository --yes ppa:kicad/kicad-9.0-releases
+          set -euo pipefail
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends kicad ngspice
-          kicad-cli version
+          sudo apt-get install --yes --no-install-recommends ngspice
+          # The KiCad PPA lookup hits Launchpad and intermittently times out on
+          # hosted runners. Retry with a hard timeout, then fall back to the
+          # distro package so the simulation/design gates can still run.
+          ppa_ok=0
+          for attempt in 1 2 3; do
+            if timeout 180 sudo add-apt-repository --yes ppa:kicad/kicad-9.0-releases; then
+              ppa_ok=1
+              break
+            fi
+            echo "::warning::KiCad PPA attempt ${attempt}/3 failed; retrying in 15s"
+            sleep 15
+          done
+          if [ "$ppa_ok" = 1 ]; then
+            sudo apt-get update || true
+            sudo apt-get install --yes --no-install-recommends kicad || true
+          fi
+          if ! command -v kicad-cli >/dev/null 2>&1; then
+            echo "::warning::KiCad 9 PPA unavailable; trying distro kicad"
+            sudo apt-get install --yes --no-install-recommends kicad || true
+          fi
+          if command -v kicad-cli >/dev/null 2>&1; then
+            kicad-cli version
+          else
+            echo "::warning::kicad-cli unavailable; KiCad-dependent checks will skip"
+          fi
           ngspice -v | head -3
 
       - name: Install optional parser
@@ -199,6 +223,10 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
+          if ! command -v kicad-cli >/dev/null 2>&1; then
+            echo "::warning::kicad-cli unavailable; schematic image export skipped"
+            exit 0
+          fi
           schematics=(out/*.kicad_sch)
           if (( ${#schematics[@]} )); then
             python scripts/render_schematic.py "${schematics[0]}" --out out/images
